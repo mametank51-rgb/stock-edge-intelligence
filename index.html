@@ -326,7 +326,9 @@ body{font-size:16px;line-height:1.7}.btn{min-height:50px;padding:12px 18px;borde
 @media(max-width:430px){.fast-axis-grid{grid-template-columns:1fr}.fast-axis{min-height:auto;display:grid;grid-template-columns:1fr auto;align-items:center}.fast-axis>strong{margin:0;text-align:right}.fast-axis small,.fast-axis .mini-row{grid-column:1/-1}}
 </style>
   <title>STOCK EDGE INTELLIGENCE · Zero-Touch Market Intelligence</title>
-<style>.refresh-controls{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);display:flex;align-items:center;flex-wrap:wrap;gap:12px}.refresh-controls>div{flex:1;min-width:180px}.refresh-controls strong{display:block;color:var(--accent);font-size:14px}.refresh-controls small{display:block;color:var(--muted);font-size:11px}.refresh-controls>small{width:100%}.refresh-controls label{font-size:12px}.refresh-controls select{min-height:42px;max-width:100%}@media(max-width:760px){.refresh-controls label,.refresh-controls select{width:100%}}</style></head>
+<style>.refresh-controls{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);display:flex;align-items:center;flex-wrap:wrap;gap:12px}.refresh-controls>div{flex:1;min-width:180px}.refresh-controls strong{display:block;color:var(--accent);font-size:14px}.refresh-controls small{display:block;color:var(--muted);font-size:11px}.refresh-controls>small{width:100%}.refresh-controls label{font-size:12px}.refresh-controls select{min-height:42px;max-width:100%}@media(max-width:760px){.refresh-controls label,.refresh-controls select{width:100%}}</style><style>
+.fast-reason-list{align-items:start}.fast-evidence{padding:0;min-width:0;overflow:hidden}.fast-evidence>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:58px;padding:14px;cursor:pointer;list-style:none;touch-action:manipulation}.fast-evidence>summary::-webkit-details-marker{display:none}.fast-evidence>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;border-radius:11px}.fast-evidence[open]{background:var(--panel2);border-color:var(--accent)}.evidence-action{color:var(--accent);font-size:11px;white-space:nowrap;flex-shrink:0}.evidence-close{display:none}.fast-evidence[open] .evidence-open{display:none}.fast-evidence[open] .evidence-close{display:inline}.fast-evidence-body{padding:0 14px 14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);line-height:1.8;overflow-wrap:anywhere}.fast-evidence-body p{margin:12px 0 0}.evidence-formula{padding:10px;border-radius:8px;background:var(--bg);color:var(--text)}.fast-evidence-signals{padding:0;margin:10px 0;list-style:none}.fast-evidence-signals li{padding:10px 0;border-bottom:1px solid var(--line)}.fast-evidence-signals li>div{display:flex;gap:12px;justify-content:space-between;color:var(--text)}.fast-evidence-signals li>p{margin:4px 0 0}.fast-evidence-signals li>div>span{white-space:nowrap;font-size:11px}
+</style></head>
 <body>
   <a class="skip-link" href="#main">メインへ移動</a>
   <div id="app"></div>
@@ -1961,6 +1963,24 @@ function decisionPanel(row){
 }
 app.addEventListener('submit',e=>{if(!e.target.matches('[data-risk-form]'))return;e.preventDefault();const form=e.target;try{const v=Object.fromEntries([...new FormData(form)].map(([k,v])=>[k,Number(v)]));const r=EdgeModel.position(v);form.querySelector('output').textContent=`購入上限 ${r.shares.toLocaleString()}株 / 買付額 ${Math.round(r.budget).toLocaleString()}円 / 想定損失 ${Math.round(r.maxLoss).toLocaleString()}円 / 利益対損失 ${r.rewardRisk.toFixed(2)}倍${r.shares===0?'（資金・許容損失に対して1単元が大きすぎます）':''}`;}catch(err){form.querySelector('output').textContent=err.message;}});
 
+
+const openEvidenceReasons=new Set();
+app.addEventListener('toggle',event=>{
+ const target=event.target;
+ if(!target.matches?.('details[data-evidence-key]'))return;
+ if(target.open)openEvidenceReasons.add(target.dataset.evidenceKey);
+ else openEvidenceReasons.delete(target.dataset.evidenceKey);
+},true);
+function fastReasonDisclosure(key,label,value,body,cls=''){
+ const id=String(state.ticker)+':'+key;
+ return `<details class="fast-reason fast-evidence ${cls}" data-evidence-key="${esc(id)}" ${openEvidenceReasons.has(id)?'open':''}><summary><span>${esc(label)} <strong>${esc(value)}</strong></span><span class="evidence-action" aria-hidden="true"><span class="evidence-open">説明を開く ＋</span><span class="evidence-close">閉じる −</span></span></summary><div class="fast-evidence-body">${body}</div></details>`;
+}
+function fastReasonSignals(tech,category){
+ const signals=(tech?.signals||[]).filter(signal=>signal.category===category);
+ if(!signals.length)return '<p>この保存データには個別シグナルの内訳がありません。詳細日足を取得すると、テクニカル分析を確認できます。</p>';
+ return `<ul class="fast-evidence-signals">${signals.map(signal=>`<li><div><strong>${esc(signal.label)}</strong><span>${signal.state==='bull'?'強気':signal.state==='bear'?'弱気':'中立'}</span></div><p>${esc(signal.detail||'詳細値なし')}</p></li>`).join('')}</ul>`;
+}
+
 function fastDetailPage(stockOverride=null){
   const ticker=state.ticker,code=fastDetailCode(ticker),row=fastDetailRow(ticker),stock=fastDetailStock(ticker,stockOverride);
   const fin=financialIntel.analyze(code,Number.isFinite(stock.price)?stock.price:(row?.price||null));
@@ -1969,11 +1989,18 @@ function fastDetailPage(stockOverride=null){
   const techChips=[Number.isFinite(row?.m20)?`<span class="fast-chip">20日 ${row.m20>=0?'+':''}${row.m20.toFixed(1)}%</span>`:'',Number.isFinite(row?.rsi)?`<span class="fast-chip">RSI ${row.rsi.toFixed(0)}</span>`:'',Number.isFinite(row?.volumeRatio)?`<span class="fast-chip">出来高 ${row.volumeRatio.toFixed(2)}×</span>`:''].filter(Boolean).join('');
   const finSub=fin.record?`${fin.count}期 · ${fin.label}`:'未取得 · 必要時だけ取得';
   const voiceSub=mv.voice?.count?`${mv.voice.count}件 · 強気${mv.voice.bull||0}/弱気${mv.voice.bear||0}`:'保存済み意見なし';
-  const reasons=[];
-  if(Number.isFinite(row?.m20))reasons.push(`<div class="fast-reason ${row.m20>=5?'good':row.m20<0?'warn':''}">20日騰落 <strong>${row.m20>=0?'+':''}${row.m20.toFixed(1)}%</strong></div>`);
-  if(Number.isFinite(row?.volumeRatio))reasons.push(`<div class="fast-reason ${row.volumeRatio>=1.4?'good':''}">出来高倍率 <strong>${row.volumeRatio.toFixed(2)}×</strong></div>`);
-  if(Number.isFinite(row?.rsi))reasons.push(`<div class="fast-reason ${row.rsi>75?'warn':''}">RSI14 <strong>${row.rsi.toFixed(1)}</strong>${row.rsi>75?' · 過熱注意':''}</div>`);
-  if(tech?.categories){for(const [k,label] of [['trend','トレンド'],['momentum','勢い']]){const v=tech.categories[k];if(Number.isFinite(v))reasons.push(`<div class="fast-reason">${label} <strong>${v}/100</strong></div>`);}}
+
+  const reasons=[],asOf=esc(row?.dataAsOf||stock.data_as_of||'不明');
+  if(Number.isFinite(row?.m20))reasons.push(fastReasonDisclosure('m20','20日騰落',`${row.m20>=0?'+':''}${row.m20.toFixed(1)}%`,
+    `<p>保存済み日足の直近終値と、20本前の終値を比較した変化率です。</p><p class="evidence-formula">（直近終値 ÷ 20本前の終値 − 1）× 100</p><p>株価基準日：${asOf}。暦日ではなく日足20本の比較です。過去の値動きであり、将来の上昇率を示すものではありません。</p>`,row.m20>=5?'good':row.m20<0?'warn':''));
+  if(Number.isFinite(row?.volumeRatio))reasons.push(fastReasonDisclosure('volume','出来高倍率',`${row.volumeRatio.toFixed(2)}×`,
+    `<p>直近5本の日足の平均出来高を、その直前20本の平均出来高で割った値です。</p><p class="evidence-formula">直近5本の平均出来高 ÷ その前20本の平均出来高</p><p>1倍が比較期間と同程度、1倍超なら出来高が増えています。出来高だけでは売り・買いの優劣は判断できません。株価基準日：${asOf}。</p>`,row.volumeRatio>=1.4?'good':''));
+  if(Number.isFinite(row?.rsi))reasons.push(fastReasonDisclosure('rsi','RSI14',row.rsi.toFixed(1),
+    `<p>直近14本の日足の値上がり幅と値下がり幅から、値動きの偏りを0〜100で示します。このアプリは単純平均方式で計算します。</p><p>保存値：${row.rsi.toFixed(1)}。このアプリでは75超を「過熱注意」と表示します。高い・低いという理由だけで反転を予測する指標ではありません。</p><p>株価基準日：${asOf}。Wilder方式など、他の計算方式とは値が異なる場合があります。</p>`,row.rsi>75?'warn':''));
+  if(tech?.categories){for(const [key,label,description] of [['trend','トレンド','移動平均・MACD・ADXなど、価格の方向を見る指標をまとめた点数です。'],['momentum','勢い','RSI・Stochastic・ROCなど、値動きの勢いを見る指標をまとめた点数です。']]){
+    const value=tech.categories[key];if(Number.isFinite(value))reasons.push(fastReasonDisclosure(key,label,`${value}/100`,
+      `<p>${description} 100点は上昇確率100%という意味ではありません。以下は保存されている採用シグナルと計算値です。</p>${fastReasonSignals(tech,key)}<p>株価基準日：${asOf}。</p>`));
+  }}
   if(!reasons.length)reasons.push('<div class="fast-reason">保存済みの簡易指標を準備中です。</div>');
   const loaded=!!(state.history&&state.candles?.length&&state.history.stock?.ticker===ticker);
   const headerPrice=Number.isFinite(stock.price)?`${stock.currency==='JPY'?'¥':stock.currency==='USD'?'$':''}${money(stock.price)}`:'—';
@@ -1981,7 +2008,7 @@ function fastDetailPage(stockOverride=null){
   const finAction=`<button class="btn" data-financial-one="${esc(code)}">財務だけ取得</button>`;
   return `<div class="fast-detail"><div class="fast-detail-head"><div class="fast-detail-title"><div class="fast-detail-symbol">${esc((stock.company||code).slice(0,1))}</div><div><div class="eyebrow">${esc(code)} · ${esc(stock.exchange)} · ${esc(stock.sector)}</div><h1>${esc(stock.company)}</h1><div class="fast-detail-price">${headerPrice}${change(stock.change_pct)}</div><div class="fast-detail-status">株価基準日 ${esc(stock.data_as_of||'—')} · 画面遷移時は保存データだけ使用</div></div></div><div class="head-actions">${watchButton(stock)}</div></div>
     <div class="fast-axis-grid">${fastDetailAxis('TECHNICAL',techScore,tech?`強気 ${tech.bull||0} / 弱気 ${tech.bear||0}`:'保存済み簡易評価',techChips)}${fastDetailAxis('FUNDAMENTAL',fundScore,finSub)}${fastDetailAxis('MARKET VOICE',voiceScore,voiceSub)}</div>
-    <section class="fast-detail-section"><div class="fast-detail-section-head"><div><h2>まず、保存済み根拠を見る</h2><p>保存済み根拠を即表示。詳細計算はボタンから実行できます。</p></div></div><div class="fast-detail-body"><div class="fast-reason-list">${reasons.slice(0,6).join('')}</div></div></section>
+    <section class="fast-detail-section"><div class="fast-detail-section-head"><div><h2>まず、保存済み根拠を見る</h2><p>各項目をタップすると、指標の意味と計算の内訳が開きます。通信は行いません。</p></div></div><div class="fast-detail-body"><div class="fast-reason-list">${reasons.slice(0,6).join('')}</div></div></section>
     <section class="fast-detail-section"><div class="fast-detail-section-head"><div><h2>財務・市場の声</h2><p>財務は必要時に取得。株価・Voiceは上部の設定に従って巡回します。</p></div><div class="fast-compact-actions">${finAction}<a class="btn" href="#/voice">市場情報を見る</a></div></div><div class="fast-detail-body"><div class="fast-data-note">FUNDAMENTAL ${Number.isFinite(fundScore)?fundScore:'—'} / MARKET VOICE ${Number.isFinite(voiceScore)?voiceScore:'—'}。財務はボタンから取得できます。株価・Voiceの継続更新は上部の更新モードで制御します。</div></div></section>
     ${decisionPanel(row)}
     ${marketVoiceStockPanel(stock)}
