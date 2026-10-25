@@ -1,4 +1,4 @@
-"""Collect public RSS metadata only. No article-page scraping or third-party package."""
+"""Collect public feeds and bounded original-article evidence using the standard library."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import xml.etree.ElementTree as ET
+from research_extract import enrich
 
 ROOT = Path(__file__).resolve().parent
 MAX_BYTES = 2_000_000
@@ -91,7 +92,7 @@ def parse_feed(data, source, rows, aliases, now):
         # Global, small-cap and unassigned articles remain readable without being
         # scored as an unrelated Nikkei 225 company.
         code, company = matched[0] if len(matched) == 1 else ('', '市場全体・225以外／銘柄未特定')
-        topic = '運用記録' if re.search(r'運用成績|ポートフォリオ|保有株|含み損益|金融資産', title) else '銘柄分析' if matched or re.search(r'決算|銘柄|企業|TOB|[（(][0-9A-Z]{4}[）)]', title) else '投資考察'
+        topic = '運用記録' if re.search(r'運用成績|運用状況|投資成績|ポートフォリオ|保有株|含み損益|金融資産', title) else '銘柄分析' if matched or re.search(r'主力概況|PF概況|決算|TOB|投資法人|[（(][0-9A-Z]{4}[）)]', title) else '投資考察'
         result.append({'id':'blog-' + hashlib.sha256(link.encode()).hexdigest()[:20], 'code':code, 'company':company, 'scope':'stock' if code else 'market', 'headline':title, 'summary':summary[:160], 'url':link, 'publishedAt':stamp.isoformat(), 'publisher':source['name'], 'author':source['name'], 'feedAuthor':source['name'], 'sourceId':source['id'], 'sourceGroup':source['owner'], 'sourceStyle':source['style'], 'topic':topic, 'communityFeed':True, 'browserAuto':True, 'extractionVersion':2, 'sourceCategory':'voice', 'opinionChannel':'community', 'collectorRoute':'original-rss', 'reasons':[topic, source['style']], 'outcome':'open'})
         if len(result) >= 16: break
     return result
@@ -126,7 +127,9 @@ def collect():
             cached = [p for p in old.get('items', []) if p.get('sourceId') == source['id'] and date_iso(p.get('publishedAt', '')) and now - date_iso(p['publishedAt']) <= timedelta(days=90)]
             return {**source, 'status':'cached' if cached else 'failed', 'checkedAt':now.isoformat(), 'count':len(cached), 'error':str(e)[:140]}, cached
     with ThreadPoolExecutor(max_workers=3) as pool: results = list(pool.map(fetch, sources))
-    payload = {'schema':'stock-edge-community-v1', 'generatedAt':now.isoformat(), 'sources':[x[0] for x in results], 'items':sorted([p for _, items in results for p in items], key=lambda p:p['publishedAt'], reverse=True)}
+    all_items=sorted([p for _, items in results for p in items], key=lambda p:p['publishedAt'], reverse=True)
+    enrich(all_items,sources,old.get('items',[]))
+    payload = {'schema':'stock-edge-community-v1', 'generatedAt':now.isoformat(), 'sources':[x[0] for x in results], 'items':all_items}
     (ROOT / 'community-data.json').write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f"Individual blogs: {len(sources)} feeds, {len(set(s['owner'] for s in sources))} writers, {len(payload['items'])} articles; {sum(s['status']=='ok' for s in payload['sources'])} feeds fetched.")
 

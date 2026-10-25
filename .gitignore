@@ -30,3 +30,15 @@ community-browser-smoke.cjs
 finish-community.py
 polish-community.py
 __pycache__/
+probe-thesis.py
+probe-article.py
+probe-body.py
+integrate-research.py
+polish-research.py
+research-browser-smoke.cjs
+research-preview.png
+finish-research.py
+research-provenance-polish.py
+!sync-voice.py
+research-final-sync.py
+fix-research-doc.py

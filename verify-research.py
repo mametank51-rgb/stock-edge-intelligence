@@ -1,0 +1,28 @@
+import unittest
+from research_extract import ArticleParser,evidence,subjects,allowed_article
+class ResearchTests(unittest.TestCase):
+ def test_body_scope(self):
+  p=ArticleParser();p.feed('<nav>割安の広告</nav><div class="article-body entry-content"><p>会社の営業利益は増益。</p><script>赤字</script><aside>広告</aside><p>価格改定の効果。</p></div><footer>投資リスク</footer><div class="article-body">別の記事</div>')
+  self.assertIn('増益',p.text());self.assertNotIn('広告',p.text());self.assertNotIn('赤字',p.text());self.assertNotIn('別の記事',p.text());self.assertNotIn('投資リスク',p.text())
+ def test_subjects_no_years_or_amounts(self):
+  self.assertEqual(subjects('2026年度 投資成績','利益7203円 1764(5292) 2020/8 2001(6003)'),[])
+  self.assertEqual(subjects('2026/8期 3481三菱地所物流リート投資法人','')[0]['code'],'3481')
+  self.assertEqual(subjects('主力概況、アメイズ。','38位 6076 アメイズ (福証、11月優待)')[0]['code'],'6076')
+  self.assertEqual(len(subjects('7203トヨタ、6758ソニーを比較','',code='7203',company='トヨタ')),2)
+ def test_negation_and_missing(self):
+  r=evidence('割安ではない','増益ではない。リスクはない。')
+  self.assertTrue(all(c['polarity']=='unclear' for c in r['claims']))
+  self.assertEqual(evidence('投資の考え方','') ['subjects'],[])
+  self.assertFalse(any(c['kind']=='risk' for c in evidence('増益','好調です')['claims']))
+ def test_allowlist_and_budget(self):
+  source={'home':'https://example.com/author/'}
+  self.assertTrue(allowed_article('https://example.com/author/post',source))
+  for url in ['http://example.com/author/post','https://example.com/other/post','https://evil.com/author/post','https://user:secret@example.com/author/post']:self.assertFalse(allowed_article(url,source))
+  r=evidence('銘柄分析','割安 増益 増配 TOB リスク なら買う。'+'新規出店。'*200)
+  self.assertLessEqual(sum(len(c['excerpt']) for c in r['claims']),340)
+ def test_generic_slogans_are_not_company_evidence(self):
+  r=evidence('企業研究','PF時価総額38位の銘柄です。PER12倍で割安と考えます。リスク・リワードが優れた最強で最上の銘柄か、何か見逃している弱点はないか。会社計画通りなら増益の場合には上昇も考えられます。')
+  self.assertIn('PER12倍',next(c['excerpt'] for c in r['claims'] if c['kind']=='valuation'))
+  self.assertFalse(any(c['kind']=='risk' for c in r['claims']))
+  self.assertEqual(next(c for c in r['claims'] if c['kind']=='condition')['conditionType'],'assumption')
+if __name__=='__main__':unittest.main()

@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),R=require('./voice-research');
+const now=Date.parse('2026-10-25T03:00:00Z');
+const a=(extra={})=>({communityFeed:true,publisher:'著者A',sourceGroup:'a',code:'7203',company:'トヨタ',headline:'企業分析',url:'https://example.com/a',publishedAt:'2026-10-24',research:{version:1,basis:'article',subjects:[{code:'7203',name:'トヨタ'}],claims:[{kind:'growth',label:'業績',polarity:'support',excerpt:'受注増加を背景に増益を予想する'}]},...extra});
+let list=R.build([a(),a({url:'https://example.com/a?utm_source=copy'}),a({url:'https://example.com/b',publisher:'著者B',sourceGroup:'b',research:{version:1,basis:'rss',subjects:[{code:'7203',name:'トヨタ'}],claims:[{kind:'growth',label:'業績',polarity:'caution',excerpt:'別の著者は需要減と減益を懸念する'}]}})],{now,quotes:{'7203':{price:2000,rsi:78,m20:20,dataAsOf:'2026-10-23'}},fundamentals:{'7203':{latest:{date:'2026-03-31'},kpi:{opYoy:-10,revYoy:2}}}});
+assert.equal(list.length,1);assert.equal(list[0].articles.length,2);assert.equal(list[0].writers,2);assert.equal(list[0].disagreements.length,1);assert.equal(list[0].overheat,true);assert.ok(list[0].checks.some(c=>c.label.includes('要照合')));assert.equal(list[0].tasks.some(t=>t.includes('反対材料')),false);
+const duplicate=R.build([a(),a({publisher:'別配信',sourceGroup:'b',url:'https://example.com/republished'})],{now});assert.equal(duplicate[0].agreements.length,0,'syndicated excerpt must not count as agreement');
+const sameOwner=R.build([a(),a({publisher:'note',sourceGroup:'a',url:'https://example.com/note'})],{now});assert.equal(sameOwner[0].writers,1);
+assert.equal(R.build([a({research:{version:1,subjects:[{code:'7203'},{code:'6758'}],claims:[]}})],{now}).length,0);
+assert.equal(R.build([a({publishedAt:'2027-01-01'})],{now}).length,0);
+assert.equal(R.build([a({publishedAt:'2025-01-01'})],{now}).length,0);
+assert.equal(R.build([a({url:'javascript:alert(1)'})],{now}).length,0);
+const stale=R.build([a()],{now,quotes:{'7203':{price:2000,rsi:90,m20:30,dataAsOf:'2025-01-01'}},journal:{'7203':{name:'トヨタ',priceCeiling:3000,reviewAt:'2026-10-20',savedAt:'2026-10-23'}}})[0];assert.equal(stale.priceReached,false);assert.equal(stale.overheat,false);assert.equal(stale.due,true);assert.equal(stale.newAfterSave,1);
+const saved=R.build([],{now,journal:{'6076':{name:'アメイズ',thesis:'自分の仮説',savedAt:'2026-10-01'}}});assert.equal(saved.length,1);assert.equal(saved[0].blogCount,0);assert.equal(R.select(saved,{filter:'saved'}).length,1);
+assert.equal(R.select(list,{filter:'divergence'}).length,1);assert.equal(R.select(list,{query:'需要減'}).length,1);assert.equal(R.select(list,{query:'無関係'}).length,0);
+console.log('PASS: subject scope, attribution, syndicated evidence, disagreement, stale prices, annual-period caveat, review queue and saved-only hypotheses.');
