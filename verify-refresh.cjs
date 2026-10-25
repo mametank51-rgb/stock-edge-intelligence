@@ -1,0 +1,38 @@
+const assert=require('node:assert/strict');
+const R=require('./refresh-runtime.js');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+ assert.equal(R.policy({type:'wifi'}).fast,true);
+ assert.equal(R.policy({type:'ethernet'}).limit,6);
+ assert.equal(R.policy({effectiveType:'4g'}).fast,false,'4g is speed, not proof of Wi-Fi');
+ assert.equal(R.policy({type:'cellular',mode:'continuous'}).lite,true);
+ assert.equal(R.policy({type:'wifi',saveData:true}).limit,2);
+ assert.equal(R.policy({mode:'paused'}).active,false);
+ assert.equal(R.policy({hidden:true}).active,false);
+ assert.equal(R.policy({online:false}).active,false);
+ assert.ok(R.retryDelay(10)<=600000);
+ let enabled=true,active=0,peak=0,calls=0;
+ const gate=R.createGate({getPolicy:()=>({active:enabled,limit:3}),fetch:async(url,options)=>{
+  calls++;active++;peak=Math.max(peak,active);
+  await new Promise((resolve,reject)=>{const t=setTimeout(resolve,10);options.signal.addEventListener('abort',()=>{clearTimeout(t);reject(Error('abort'));},{once:true});}).finally(()=>active--);
+  return new Response('ok');
+ }});
+ await Promise.all(Array.from({length:20},(_,i)=>gate.request('https://test.example/'+i)));
+ assert.equal(calls,20);assert.equal(peak,3);
+ const pending=Array.from({length:10},(_,i)=>gate.request('https://test.example/abort/'+i));
+ const all=Promise.allSettled(pending);await sleep(1);enabled=false;gate.pause();
+ assert.equal((await all).filter(r=>r.status==='rejected').length,10);
+ await sleep(0);assert.equal(gate.stats().active,0);assert.equal(gate.stats().queued,0);
+ enabled=true;gate.resume();assert.equal(await(await gate.request('https://test.example/resume')).text(),'ok');
+ let count429=0;
+ const rate=R.createGate({getPolicy:()=>({active:true,limit:1}),fetch:async()=>{count429++;return new Response('limited',{status:429,headers:{'Retry-After':'60'}});}});
+ await rate.request('https://rate.example/first');await assert.rejects(rate.request('https://rate.example/second'));assert.equal(count429,1);
+ let bodyActive=0,bodyPeak=0;
+ const bodies=R.createGate({getPolicy:()=>({active:true,limit:2}),fetch:async()=>{bodyActive++;bodyPeak=Math.max(bodyPeak,bodyActive);return new Response(new ReadableStream({start(controller){setTimeout(()=>{bodyActive--;controller.enqueue(new TextEncoder().encode('body'));controller.close();},15);}}));}});
+ await Promise.all(Array.from({length:8},()=>bodies.request('https://body.example/')));assert.equal(bodyPeak,2,'slots include response body transfer');
+ let processed=0;
+ await R.pool(Array.from({length:100},(_,i)=>i),2,async()=>{processed++;},{shouldContinue:()=>processed<4});assert.ok(processed<=4);
+ const fs=require('node:fs'),html=fs.readFileSync('index.html','utf8');
+ assert.ok(html.replace(/\r\n/g,'\n').includes(fs.readFileSync('refresh-runtime.js','utf8').replace(/\r\n/g,'\n')),'deployed HTML must embed tested runtime');
+ console.log('PASS: refresh policies, bounded network and body concurrency, pause/abort/resume, rate-limit backoff, stoppable pool, embedded runtime.');
+})().catch(e=>{console.error(e);process.exit(1);});

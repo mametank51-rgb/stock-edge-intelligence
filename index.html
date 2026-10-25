@@ -326,7 +326,7 @@ body{font-size:16px;line-height:1.7}.btn{min-height:50px;padding:12px 18px;borde
 @media(max-width:430px){.fast-axis-grid{grid-template-columns:1fr}.fast-axis{min-height:auto;display:grid;grid-template-columns:1fr auto;align-items:center}.fast-axis>strong{margin:0;text-align:right}.fast-axis small,.fast-axis .mini-row{grid-column:1/-1}}
 </style>
   <title>STOCK EDGE INTELLIGENCE · Zero-Touch Market Intelligence</title>
-</head>
+<style>.refresh-controls{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);display:flex;align-items:center;flex-wrap:wrap;gap:12px}.refresh-controls>div{flex:1;min-width:180px}.refresh-controls strong{display:block;color:var(--accent);font-size:14px}.refresh-controls small{display:block;color:var(--muted);font-size:11px}.refresh-controls>small{width:100%}.refresh-controls label{font-size:12px}.refresh-controls select{min-height:42px;max-width:100%}@media(max-width:760px){.refresh-controls label,.refresh-controls select{width:100%}}</style></head>
 <body>
   <a class="skip-link" href="#main">メインへ移動</a>
   <div id="app"></div>
@@ -384,6 +384,47 @@ function position({capital,riskPct,entry,stop,target,lot=100,costBps=20}){
 }
 const model={aliases,age,classify,relevant,key,metric,composite,position};
 if(typeof module!=='undefined')module.exports=model;else root.EdgeModel=model;
+})(typeof globalThis!=='undefined'?globalThis:this);
+</script>
+<script>/* Shared network budget and pure refresh policy. No external dependencies. */
+(function(root){
+'use strict';
+function policy({mode='auto',type='',effectiveType='',saveData=false,online=true,hidden=false}={}){
+ const stopped=hidden||!online||mode==='paused';
+ const lite=saveData||mode==='lite'||type==='cellular'||['slow-2g','2g','3g'].includes(effectiveType);
+ const fast=!lite&&(mode==='continuous'||['wifi','ethernet'].includes(type));
+ return {active:!stopped,fast,lite,limit:lite?2:fast?6:4,stockWorkers:lite?1:fast?4:2,stockBatch:lite?6:fast?24:12,voiceBatch:lite?3:fast?16:8,voiceWorkers:lite?1:fast?3:2,gap:lite?15000:fast?1500:3000,voiceTtl:lite?3600000:fast?600000:1800000,stockTtl:lite?3600000:fast?300000:900000,label:stopped?(hidden?'画面非表示・休止':!online?'オフライン':'自動更新停止'):lite?'省通信':fast?'常時更新': '自動・標準（回線種別不明）'};
+}
+function retryDelay(failures){return Math.min(600000,15000*2**Math.min(6,Math.max(0,failures-1)));}
+function createGate({fetch:fetcher,getPolicy,now=Date.now}){
+ let active=0,peak=0;const queue=[],cooldowns=new Map(),inflight=new Set();
+ function drain(){
+  const p=getPolicy();
+  if(!p.active){while(queue.length)queue.shift().reject(Object.assign(Error('更新を休止しました'),{name:'AbortError'}));return;}
+  while(queue.length&&active<p.limit){
+   const job=queue.shift();if(job.options.signal?.aborted){job.reject(Object.assign(Error('Aborted'),{name:'AbortError'}));continue;}
+   const host=new URL(job.url,'http://localhost').host;
+   if((cooldowns.get(host)||0)>now()){job.reject(Error('取得先の再試行待ち'));continue;}
+   active++;peak=Math.max(peak,active);const ctrl=new AbortController();inflight.add(ctrl);
+   const abort=()=>ctrl.abort();job.options.signal?.addEventListener('abort',abort,{once:true});
+   Promise.resolve().then(()=>fetcher(job.url,{...job.options,signal:ctrl.signal})).then(async response=>{
+    if(response.status===429||response.status===503){const h=response.headers.get('retry-after'),seconds=Number(h);const ms=h?(Number.isFinite(seconds)?seconds*1000:Date.parse(h)-now()):60000;cooldowns.set(host,now()+Math.max(15000,Math.min(600000,ms||60000)));}
+    // Hold the slot until the body arrives, rather than releasing at response headers.
+    const body=await response.arrayBuffer();return new Response([204,205,304].includes(response.status)?null:body,{status:response.status,statusText:response.statusText,headers:response.headers});
+   }).then(job.resolve,job.reject).finally(()=>{job.options.signal?.removeEventListener('abort',abort);inflight.delete(ctrl);active--;drain();});
+  }
+ }
+ function request(url,options={}){return new Promise((resolve,reject)=>{queue.push({url,options,resolve,reject});drain();});}
+ function pause(){while(queue.length)queue.shift().reject(Object.assign(Error('更新を休止しました'),{name:'AbortError'}));for(const ctrl of inflight)ctrl.abort();}
+ return {request,pause,resume:drain,stats:()=>({active,queued:queue.length,peak})};
+}
+async function pool(items,limit,worker,{shouldContinue=()=>true,onStep=()=>{}}={}){
+ let cursor=0,done=0;const out=[];
+ async function run(){while(shouldContinue()){const i=cursor++;if(i>=items.length)return;try{out[i]=await worker(items[i],i);}catch(error){out[i]={ok:false,error};}onStep(++done,items.length,out[i]);await new Promise(r=>setTimeout(r,0));}}
+ await Promise.all(Array.from({length:Math.min(limit,items.length)},run));return out;
+}
+const api={policy,retryDelay,createGate,pool};
+if(typeof module!=='undefined')module.exports=api;else root.EdgeRefresh=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
 </script>
   <script>
@@ -873,7 +914,7 @@ function guideHome(state,guide,backend,job,running) {
   const top=v4TopRows(rows,3), newest=stats.ok.map(r=>r.dataAsOf).filter(Boolean).sort().at(-1)||'—', oldCount=Math.max(0,stats.coverage-stats.fresh.length);
   const voiceDb=marketVoice.read(), voiceCount=voiceDb.predictions.length, voiceCoverage=new Set(voiceDb.predictions.map(p=>p.code).filter(Boolean)).size;
   const discoveries=v4Discoveries(rows), themes=v4Themes(rows), signals=v4Signals(rows);
-  const cards=top.length?top.map((x,i)=>v4StockCard(x.r,i)).join(''):`<div class="v4-empty" style="grid-column:1/-1"><strong>保存済みランキングを準備中</strong>画面はそのまま操作できます。日経225は裏側で少しずつ差分更新します。</div>`;
+  const cards=top.length?top.map((x,i)=>v4StockCard(x.r,i)).join(''):`<div class="v4-empty" style="grid-column:1/-1"><strong>保存済みランキングを準備中</strong>画面はそのまま操作できます。日経225は通信上限を守りながら連続して巡回します。</div>`;
   const disc=discoveries.map(d=>`<article class="v4-discovery-card"><div class="v4-discovery-label">${esc(d.label)}</div>${d.row?`<h3>${esc(d.row.name||d.row.officialName)}</h3><p>${esc(d.row.code)} · ${esc(d.desc||'')}</p><button data-n225-detail="${esc(d.row.code)}">根拠を見る →</button>`:`<h3>—</h3><p>${esc(d.desc||'データ待ち')}</p><button disabled>データ待ち</button>`}</article>`).join('');
   const themeHtml=themes.length?themes.map((t,i)=>`<article class="v4-theme"><div class="v4-theme-rank">THEME #${i+1}</div><h3>${esc(t.sector)}</h3><div class="v4-theme-score">${t.avg}</div><small>${t.n}銘柄 · 20日平均 ${Number.isFinite(t.m20avg)?(t.m20avg>=0?'+':'')+t.m20avg.toFixed(1)+'%':'—'}</small></article>`).join(''):`<div class="v4-empty"><strong>テーマ集計待ち</strong>株価データが増えると業種別に自動集計します。</div>`;
   const sigHtml=signals.length?signals.map(x=>`<button class="v4-signal-item" data-n225-detail="${esc(x.r.code)}"><span><strong>${esc(x.r.name||x.r.officialName)}</strong><small>${esc(x.r.code)} · TECH ${x.i.tech??'—'} / FUND ${x.i.fund.score??'—'} / VOICE ${x.i.voice??'—'}</small></span><span class="v4-signal ${x.i.kind}">${x.i.signal}</span></button>`).join(''):`<div class="v4-empty" style="grid-column:1/-1"><strong>3軸シグナルはデータが揃うと表示</strong>Technicalはすぐ利用できます。財務とMarket Voiceが集まった銘柄から、一致・逆行を自動判定します。</div>`;
@@ -1004,7 +1045,7 @@ async function request(path, options = {}, backend = readBackend()) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(`${backend}${path}`, {
+    const response = await window.stockEdgeRequest(`${backend}${path}`, {
       ...options, signal: controller.signal,
       credentials: 'omit', cache: 'no-store',
       headers: { ...(options.body ? {'Content-Type': 'application/json'} : {}), ...options.headers },
@@ -1049,7 +1090,7 @@ function tokyoDay(seconds){
 }
 async function fetchJson(url,timeout=12000){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
-  try{const r=await fetch(url,{signal:controller.signal,credentials:'omit',cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}
+  try{const r=await window.stockEdgeRequest(url,{signal:controller.signal,credentials:'omit',cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}
   finally{clearTimeout(timer);}
 }
 async function yahooChart(ticker){
@@ -1152,7 +1193,7 @@ function settings(){try{return {...{auto:true,concurrency:4},...JSON.parse(HTML_
 function saveSettings(patch){const v={...settings(),...patch};try{HTML_CONTEXT.storage.setItem(SETTINGS,JSON.stringify(v));}catch{}return v;}
 function ySymbol(code){return String(code)+'.T';}
 function day(ts){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ts*1000));}
-async function fetchJson(url,timeout=10000){const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{signal:c.signal,credentials:'omit',cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}finally{clearTimeout(t);}}
+async function fetchJson(url,timeout=10000){const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);try{const r=await window.stockEdgeRequest(url,{signal:c.signal,credentials:'omit',cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();}finally{clearTimeout(t);}}
 async function fetchShort(code){const target=DIRECT_BASE+encodeURIComponent(ySymbol(code))+'?range=1y&interval=1d&events=div%2Csplits&includePrePost=false';let last;for(const [transport,url] of [['direct',target],['cors.dev',PROXY+target]]){try{const body=await fetchJson(url);const r=body?.chart?.result?.[0],q=r?.indicators?.quote?.[0],ts=r?.timestamp||[];if(!r||!q||ts.length<55)throw new Error('日足不足');const rows=[];for(let i=0;i<ts.length;i++){const o=Number(q.open?.[i]),h=Number(q.high?.[i]),l=Number(q.low?.[i]),c=Number(q.close?.[i]),v=Number(q.volume?.[i]);if([o,h,l,c,v].some(x=>!Number.isFinite(x)))continue;rows.push({time:day(ts[i]),open:o,high:h,low:l,close:c,volume:v});}if(rows.length<55)throw new Error('有効日足不足');return {rows,meta:r.meta||{},transport};}catch(e){last=e;}}throw last||new Error('取得失敗');}
 function avg(a){return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;}
 function pct(a,b){return Number.isFinite(a)&&Number.isFinite(b)&&b!==0?(a/b-1)*100:null;}
@@ -1164,7 +1205,20 @@ async function one(info){try{return score(await fetchShort(info.code),info);}cat
 function ageHours(row){const t=Date.parse(row?.fetchedAt||'');return Number.isFinite(t)?(Date.now()-t)/36e5:Infinity;}
 function rows(){const db=read();return UNIVERSE.map(info=>({...info,...db.rows[info.code]}));}
 function stats(){const all=rows(),ok=all.filter(r=>Number.isFinite(r.price)),fresh=ok.filter(r=>ageHours(r)<=CACHE_HOURS);return {all,ok,fresh,failed:all.filter(r=>r.error),coverage:ok.length};}
-async function scan({force=false,codes=null,onProgress=()=>{}}={}){if(running)return false;running=true;cancel=false;const db=read(),targets=(codes?UNIVERSE.filter(x=>codes.includes(x.code)):UNIVERSE).filter(info=>force||db.rows[info.code]?.error||db.rows[info.code]?.techVersion!==3||ageHours(db.rows[info.code])>CACHE_HOURS);progress={done:0,total:targets.length,failed:0,current:'',started:new Date().toISOString()};db.lastAttempt=progress.started;write(db);onProgress(clone(progress));if(!targets.length){running=false;return true;}let index=0;const concurrency=Math.max(1,Math.min(6,Number(settings().concurrency)||4));async function worker(){while(!cancel){const i=index++;if(i>=targets.length)return;const info=targets[i];progress.current=info.code+' '+info.name;onProgress(clone(progress));const row=await one(info);db.rows[info.code]=row;if(row.error)progress.failed++;progress.done++;if(progress.done%5===0||progress.done===progress.total)write(db);onProgress(clone(progress));await new Promise(r=>setTimeout(r,120));}}await Promise.all(Array.from({length:concurrency},worker));if(!cancel&&codes==null&&progress.done===progress.total)db.lastFullScan=new Date().toISOString();write(db);running=false;progress.current=cancel?'中止しました':'完了';onProgress(clone(progress));return !cancel;}
+async function scan({force=false,codes=null,onProgress=()=>{},maxAgeMs=CACHE_HOURS*36e5,concurrency:requestedConcurrency=null,shouldContinue=()=>!document.hidden&&navigator.onLine!==false}={}){
+ if(running)return false;running=true;cancel=false;
+ const db=read(),targets=(codes?UNIVERSE.filter(x=>codes.includes(x.code)):UNIVERSE).filter(info=>force||db.rows[info.code]?.error||db.rows[info.code]?.techVersion!==3||ageHours(db.rows[info.code])*36e5>maxAgeMs);
+ progress={done:0,total:targets.length,failed:0,current:'',started:new Date().toISOString()};db.lastAttempt=progress.started;onProgress(clone(progress));
+ let lastWrite=0;
+ try{await EdgeRefresh.pool(targets,Math.max(1,Math.min(4,requestedConcurrency||Number(settings().concurrency)||2)),async info=>{
+  progress.current=info.code+' '+info.name;const next=await one(info),prev=db.rows[info.code];if(cancel||!shouldContinue())return;
+  if(next.error){const failures=(prev?.retryFailures||0)+1;db.rows[info.code]={...prev,...next,fetchedAt:prev?.fetchedAt||null,lastAttemptAt:next.fetchedAt,retryFailures:failures,retryAt:Date.now()+EdgeRefresh.retryDelay(failures)};progress.failed++;}
+  else db.rows[info.code]={...next,retryFailures:0,retryAt:0};
+  progress.done++;if(Date.now()-lastWrite>2000){write(db);lastWrite=Date.now();}onProgress(clone(progress));
+ },{shouldContinue:()=>!cancel&&shouldContinue()});
+ if(!cancel&&codes==null&&progress.done===progress.total)db.lastFullScan=new Date().toISOString();return !cancel;
+ }finally{write(db);running=false;progress.current=cancel?'休止':'完了';onProgress(clone(progress));}
+}
 function stop(){cancel=true;}
 function isRunning(){return running;}
 function getProgress(){return clone(progress);}
@@ -1378,6 +1432,7 @@ function demoBanner(stock=null) {
 }
 
 function shell(body) {
+  body=refreshControls()+body;
   const data=state.data, watchCount=data?.watchlist.length ?? 0;
   return `<div class="shell"><aside class="sidebar" aria-label="メインナビゲーション">
     <a class="brand" href="#/home"><span class="brand-mark">${icon('edge')}</span><span class="brand-name">STOCK EDGE<span class="brand-sub">INTELLIGENCE</span></span></a>
@@ -1517,7 +1572,7 @@ const marketVoice = (()=>{
   let syncState={status:'idle',message:'自動収集データを確認します',lastAttempt:null};
   const defaultDb=()=>({schema:'market-voice-v2-auto',predictions:[],remoteMeta:null,lastClientSync:null});
   const read=()=>{try{const v=JSON.parse(HTML_CONTEXT.storage.getItem(KEY)||'null');return v&&v.schema==='market-voice-v2-auto'?{...defaultDb(),...v}:defaultDb();}catch{return defaultDb();}};
-  const write=db=>{HTML_CONTEXT.storage.setItem(KEY,JSON.stringify(db));return db;};
+  const write=db=>{HTML_CONTEXT.storage.setItem(KEY,JSON.stringify(db));metricMemo.clear();metricDbSnapshot=null;return db;};
   const rows=()=>__modules.nikkei225?.rows?.()||[];
   const codeOfTicker=t=>String(t||'').replace(/\.T$/i,'').replace(/0$/,'').slice(0,4);
   const quote=code=>rows().find(r=>r.code===String(code));
@@ -1529,7 +1584,7 @@ const marketVoice = (()=>{
     try{
       if(location.protocol==='file:'){syncState={status:'local',message:'ダウンロード版：保存済みの市場情報を使用',lastAttempt:new Date().toISOString()};db.lastClientSync=new Date().toISOString();write(db);return db;}
       const join=REMOTE_URL+(REMOTE_URL.includes('?')?'&':'?')+'v='+Date.now();
-      const res=await fetch(join,{cache:'no-store',credentials:'omit'});
+      const res=await window.stockEdgeRequest(join,{cache:'no-store',credentials:'omit'});
       if(!res.ok)throw new Error('自動収集データ HTTP '+res.status);
       const payload=await res.json();
       if(payload?.schema!=='stock-edge-market-intel-v1'||!Array.isArray(payload.items))throw new Error('自動収集JSONの形式が違います');
@@ -1547,10 +1602,12 @@ const marketVoice = (()=>{
   const evaluate=()=>{const db=read(),now=Date.now();db.predictions=db.predictions.map(p=>{const q=quote(p.code);if(!Number.isFinite(q?.price)||!Number.isFinite(p.entryPrice))return p;let outcome=p.outcome;if(p.targetPrice){if(p.stance==='bullish'&&q.price>=p.targetPrice)outcome='hit';else if(p.stance==='bearish'&&q.price<=p.targetPrice)outcome='hit';else if(p.deadline&&now>Date.parse(p.deadline))outcome='miss';}else if(p.deadline&&now>Date.parse(p.deadline)){const ch=(q.price/p.entryPrice-1)*100;outcome=p.stance==='bullish'?(ch>0?'hit':'miss'):p.stance==='bearish'?(ch<0?'hit':'miss'):'open';}return {...p,outcome,outcomeAt:outcome!=='open'?new Date().toISOString():p.outcomeAt,outcomePrice:outcome!=='open'?q.price:p.outcomePrice};});write(db);return db;};
   const authorStats=name=>{const ps=read().predictions.filter(p=>p.author===name&&['hit','miss'].includes(p.outcome));const hits=ps.filter(p=>p.outcome==='hit').length;return {count:ps.length,hits,rate:ps.length?Math.round(hits/ps.length*100):null};};
   const watcherWeight=name=>{const s=authorStats(name);return s.count>=3?(.75+s.rate/200):1;};
+  let metricEpoch='',metricMemo=new Map(),metricDbSnapshot=null;
   const metricFor=(code,material=false)=>{
-    const db=read(),now=Date.now(),items=db.predictions.filter(p=>p.code===code&&(!p.browserAuto||p.extractionVersion===2)&&((p.sourceCategory==='material'||materialTypes.has(p.sourceType))===material));
-    if(!items.length)return {score:null,count:0,bull:0,bear:0,neutral:0,sources:0,channels:0};
-    return EdgeModel.metric(items);
+    const epoch=renderEpoch+'|'+Math.floor(Date.now()/60000);if(epoch!==metricEpoch){metricEpoch=epoch;metricMemo.clear();metricDbSnapshot=null;}const mk=code+'|'+material;if(metricMemo.has(mk))return metricMemo.get(mk);
+    const db=metricDbSnapshot||(metricDbSnapshot=read()),now=Date.now(),items=db.predictions.filter(p=>p.code===code&&(!p.browserAuto||p.extractionVersion===2)&&((p.sourceCategory==='material'||materialTypes.has(p.sourceType))===material));
+    if(!items.length){const empty={score:null,count:0,bull:0,bear:0,neutral:0,sources:0,channels:0};metricMemo.set(mk,empty);return empty;}
+    const result=EdgeModel.metric(items);metricMemo.set(mk,result);return result;
   };
   const metrics=code=>{const row=quote(code),voice=metricFor(code,false),material=metricFor(code,true),tech=Number.isFinite(row?.score)?row.score:null;const dir=v=>v==null?'none':v>=65?'bull':v<=40?'bear':'neutral';const ds=[dir(tech),dir(voice.score),dir(material.score)],known=ds.filter(x=>x!=='none');let signal='DATA BUILDING',kind='neutral';if(known.length===3&&known.every(x=>x==='bull')){signal='TRIPLE ALIGNMENT';kind='triple';}else if(known.length===3&&known.every(x=>x==='bear')){signal='TRIPLE RISK';kind='risk';}else if(dir(tech)==='bull'&&dir(voice.score)==='bear'){signal='MARKET DIVERGENCE';kind='diverge';}else if(dir(voice.score)==='bull'&&tech!=null&&tech<55){signal='VOICE LEADS';kind='diverge';}else if(known.length>=2&&known.every(x=>x==='bull')){signal='BULLISH ALIGNMENT';kind='triple';}else if(known.length>=2&&known.every(x=>x==='bear')){signal='BEARISH ALIGNMENT';kind='risk';}return {tech,voice,material,signal,kind};};
   const status=()=>({...syncState,db:read()});
@@ -1571,7 +1628,8 @@ const financialIntel = (()=>{
   let job={running:false,done:0,total:0,failed:0,current:'',message:'保存済み財務を表示'};
   const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
   const num=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
-  const read=()=>{try{const v=JSON.parse(HTML_CONTEXT.storage.getItem(KEY)||'null');if(v?.version===VERSION&&v.rows)return v;}catch{}return {version:VERSION,rows:{},lastAttempt:null,lastSuccess:null};};
+  let finRawCache=null,finDbCache=null;
+  const read=()=>{try{const raw=HTML_CONTEXT.storage.getItem(KEY)||'null';if(raw===finRawCache&&finDbCache)return finDbCache;const v=JSON.parse(raw);if(v?.version===VERSION&&v.rows){finRawCache=raw;finDbCache=v;return v;}}catch{}return {version:VERSION,rows:{},lastAttempt:null,lastSuccess:null};};
   const write=v=>{try{HTML_CONTEXT.storage.setItem(KEY,JSON.stringify(v));}catch{}return v;};
   const row=code=>read().rows[String(code)]||null;
   function sourceSnapshot(code){
@@ -1599,7 +1657,7 @@ const financialIntel = (()=>{
   }
   async function fetchJsonRoute(url,timeout=14000){
     const routes=[{url,transport:'direct'},{url:PROXY+url,transport:'cors.dev'}];let last=null;
-    for(const r of routes){const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);try{const res=await fetch(r.url,{signal:c.signal,credentials:'omit',cache:'no-store'});if(!res.ok)throw new Error('HTTP '+res.status);const body=await res.json();if(body?.timeseries?.error)throw new Error(body.timeseries.error.description||'financial source error');return {body,transport:r.transport};}catch(e){last=e;}finally{clearTimeout(t);}}
+    for(const r of routes){const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);try{const res=await window.stockEdgeRequest(r.url,{signal:c.signal,credentials:'omit',cache:'no-store'});if(!res.ok)throw new Error('HTTP '+res.status);const body=await res.json();if(body?.timeseries?.error)throw new Error(body.timeseries.error.description||'financial source error');return {body,transport:r.transport};}catch(e){last=e;}finally{clearTimeout(t);}}
     throw last||new Error('財務データを取得できません');
   }
   async function fetchOne(code,force=false){
@@ -1781,7 +1839,7 @@ function todayDashboard(){
   const top=v4TopRows(rows,3), newest=stats.ok.map(r=>r.dataAsOf).filter(Boolean).sort().at(-1)||'—', oldCount=Math.max(0,stats.coverage-stats.fresh.length);
   const voiceDb=marketVoice.read(), voiceCount=voiceDb.predictions.length, voiceCoverage=new Set(voiceDb.predictions.map(p=>p.code).filter(Boolean)).size;
   const discoveries=v4Discoveries(rows), themes=v4Themes(rows), signals=v4Signals(rows);
-  const cards=top.length?top.map((x,i)=>v4StockCard(x.r,i)).join(''):`<div class="v4-empty" style="grid-column:1/-1"><strong>保存済みランキングを準備中</strong>画面はそのまま操作できます。日経225は裏側で少しずつ差分更新します。</div>`;
+  const cards=top.length?top.map((x,i)=>v4StockCard(x.r,i)).join(''):`<div class="v4-empty" style="grid-column:1/-1"><strong>保存済みランキングを準備中</strong>画面はそのまま操作できます。日経225は通信上限を守りながら連続して巡回します。</div>`;
   const disc=discoveries.map(d=>`<article class="v4-discovery-card"><div class="v4-discovery-label">${esc(d.label)}</div>${d.row?`<h3>${esc(d.row.name||d.row.officialName)}</h3><p>${esc(d.row.code)} · ${esc(d.desc||'')}</p><button data-n225-detail="${esc(d.row.code)}">根拠を見る →</button>`:`<h3>—</h3><p>${esc(d.desc||'データ待ち')}</p><button disabled>データ待ち</button>`}</article>`).join('');
   const themeHtml=themes.length?themes.map((t,i)=>`<article class="v4-theme"><div class="v4-theme-rank">THEME #${i+1}</div><h3>${esc(t.sector)}</h3><div class="v4-theme-score">${t.avg}</div><small>${t.n}銘柄 · 20日平均 ${Number.isFinite(t.m20avg)?(t.m20avg>=0?'+':'')+t.m20avg.toFixed(1)+'%':'—'}</small></article>`).join(''):`<div class="v4-empty"><strong>テーマ集計待ち</strong>株価データが増えると業種別に自動集計します。</div>`;
   const sigHtml=signals.length?signals.map(x=>`<button class="v4-signal-item" data-n225-detail="${esc(x.r.code)}"><span><strong>${esc(x.r.name||x.r.officialName)}</strong><small>${esc(x.r.code)} · TECH ${x.i.tech??'—'} / FUND ${x.i.fund.score??'—'} / VOICE ${x.i.voice??'—'}</small></span><span class="v4-signal ${x.i.kind}">${x.i.signal}</span></button>`).join(''):`<div class="v4-empty" style="grid-column:1/-1"><strong>3軸シグナルはデータが揃うと表示</strong>Technicalはすぐ利用できます。財務とMarket Voiceが集まった銘柄から、一致・逆行を自動判定します。</div>`;
@@ -1823,7 +1881,7 @@ function marketVoicePage(){
   const sources=sourceRanks.length?sourceRanks.map((x,i)=>`<div class="auto-rank-row"><div class="auto-rank-no">${i+1}</div><div><strong>${esc(x.name)}</strong><small>${x.count}件 · ${x.channels.size}チャネル</small></div></div>`).join(''):'<div class="voice-empty">蓄積後に表示します。</div>';
   return `<div class="v4-dashboard">
     <header class="v4-hero"><div><div class="eyebrow">MARKET VOICE · BROAD SPECTRUM</div><h1>市場の意見を、広く集める</h1><p>ニュースだけでなく、アナリスト・決算/IR・個人投資家・動画/解説を別レンズで探索。重複をまとめ、同じ媒体の大量投稿がスコアを支配しないよう補正します。</p></div><div class="v4-hero-actions"><span class="v4-status ${bg.intelRunning?'working':''}"><i></i>${bg.intelRunning?'複数チャネルを巡回中':'保存情報を表示'}</span><button class="v4-update mv-update-btn" data-market-intel-refresh>${bg.intelRunning?'更新中…':'広く収集する'}</button></div></header>
-    <div class="mv-collector"><div class="wide"><span>収集エンジン</span><strong class="${lastSuccess?'mv-good':collector.consecutiveEmpty?'mv-warn':''}">${lastSuccess?'BROAD MODE':'取得経路を確認中'}</strong><small data-mv-progress-text>${bg.intelRunning?`${bg.intelDone||0}/${bg.intelTotal||0}銘柄 · ${bg.intelFound||0}件`: `最終成功 ${esc(lastSuccessText)} · ${collector.lastLensCount||0}レンズ · ${esc(routeText)}`}</small><div class="mv-progress"><i data-mv-progress-bar style="width:${bg.intelRunning&&bg.intelTotal?Math.round((bg.intelDone||0)/bg.intelTotal*100):0}%"></i></div><details><summary>前回の取得失敗（${collector.lensErrors?.length||0}経路）</summary><p>${esc((collector.lensErrors||[]).join(' / ')||'なし')}</p></details><div class="mv-lens-row"><span class="mv-lens-chip">一般ニュース</span><span class="mv-lens-chip">アナリスト</span><span class="mv-lens-chip">決算・IR</span><span class="mv-lens-chip">個人投資家</span><span class="mv-lens-chip">動画・解説</span><span class="mv-lens-chip">Google / Bing</span></div></div><div><span>今回確認</span><strong>${collector.lastScanned||0}銘柄</strong><small>手動最大12銘柄</small></div><div><span>前回取得</span><strong>${collector.lastFound||0}件</strong><small>${collector.lastFailed||0}銘柄失敗</small></div><div><span>再試行</span><strong>${collector.consecutiveEmpty?'3分後':'30分後'}</strong><small>空振りを長時間固定しない</small></div></div>
+    <div class="mv-collector"><div class="wide"><span>収集エンジン</span><strong class="${lastSuccess?'mv-good':collector.consecutiveEmpty?'mv-warn':''}">${lastSuccess?'BROAD MODE':'取得経路を確認中'}</strong><small data-mv-progress-text>${bg.intelRunning?`${bg.intelDone||0}/${bg.intelTotal||0}検索 · ${bg.intelFound||0}件`: `最終成功 ${esc(lastSuccessText)} · ${collector.lastLensCount||0}レンズ · ${esc(routeText)}`}</small><div class="mv-progress"><i data-mv-progress-bar style="width:${bg.intelRunning&&bg.intelTotal?Math.round((bg.intelDone||0)/bg.intelTotal*100):0}%"></i></div><details><summary>前回の取得失敗（${collector.lensErrors?.length||0}経路）</summary><p>${esc((collector.lensErrors||[]).join(' / ')||'なし')}</p></details><div class="mv-lens-row"><span class="mv-lens-chip">一般ニュース</span><span class="mv-lens-chip">アナリスト</span><span class="mv-lens-chip">決算・IR</span><span class="mv-lens-chip">個人投資家</span><span class="mv-lens-chip">動画・解説</span><span class="mv-lens-chip">Google / Bing</span></div></div><div><span>今回確認</span><strong>${collector.lastScanned||0}銘柄</strong><small>${refreshPolicy().voiceBatch}銘柄 / 並列取得</small></div><div><span>前回取得</span><strong>${collector.lastFound||0}件</strong><small>${collector.lastFailed||0}銘柄失敗</small></div><div><span>再試行</span><strong>${collector.consecutiveEmpty?'失敗時は間隔延長':'自動で継続巡回'}</strong><small>空振りを長時間固定しない</small></div></div>
     <div class="v4-summary"><div class="v4-summary-item"><span>市場情報</span><strong>${preds.length}</strong><small>重複整理後</small></div><div class="v4-summary-item"><span>カバー銘柄</span><strong>${coverage}/225</strong><small>情報がある銘柄</small></div><div class="v4-summary-item"><span>VOICE / MATERIAL</span><strong>${voice} / ${news}</strong><small>意見と事実を分離</small></div></div>
     <section class="v4-section"><div class="v4-section-head"><div><h2>意見の広がり</h2><p>どの種類の情報が集まっているかを先に確認します。</p></div></div><div class="mv-channel-grid">${channelCards}</div><div class="mv-breadth-note">Market Voiceは「件数が多い＝正しい」とは扱いません。同じ媒体が複数記事を出した場合は重みを逓減し、複数チャネル・複数媒体の一致を重視します。</div></section>
     <section class="v4-section"><div class="v4-section-head"><div><h2>一致・逆行を先に見る</h2><p>Technical / Fundamental / Market Voiceが同じ方向か、意見が価格と逆行しているかを確認。</p></div></div><div class="v4-signal-list">${sig}</div></section>
@@ -1977,6 +2035,7 @@ async function render() {
   else if (route==='stock') body=fastDetailPage();
   else body=heading('PAGE NOT FOUND','ページが見つかりません','ナビゲーションから画面を選んでください。','<a class="btn" href="#/home">ホームへ</a>');
   app.innerHTML=shell(body+(route==='stock'?'':debugPanel()));
+  paintBackgroundStatus();
   document.title=`${navItems.find(([k])=>k===route)?.[2]||'ページ'} · STOCK EDGE`;
   if (!state.data||state.error||state.loading) return;
   if (route==='stock') {
@@ -1995,7 +2054,7 @@ async function render() {
       const selectedPattern=state.evidencePatterns.find(p=>p.id===state.evidenceId);
       if(selectedPattern&&state.range&&selectedPattern.a<history.candles.length-state.range)state.range=0;
       history.evidence=selectedPattern;history.showSMA=state.showSMA;
-      app.innerHTML=shell(fastDetailPage(stock));
+      app.innerHTML=shell(fastDetailPage(stock));paintBackgroundStatus();
       const container=document.querySelector('#candlestick-chart');
       if (!container) return;
       const paint=()=>drawCandles(container,state.candles,state.range,state.history||{});
@@ -2022,83 +2081,104 @@ async function boot() {
   await render();
   if(!state.error){
     scheduleBackgroundRefresh();
-    // External intelligence is intentionally deferred. Navigation and taps stay responsive first.
-    setTimeout(()=>{if(!document.hidden&&['home','voice'].includes(state.route))collectBrowserMarketIntel(false).catch(()=>{});},45000);
-    if(/^https?:$/i.test(location.protocol))setTimeout(()=>{if(!document.hidden&&['home','voice'].includes(state.route))marketVoice.syncRemote(false).then(()=>marketVoice.evaluate()).catch(()=>{});},30000);
+
+    if(/^https?:$/i.test(location.protocol))setTimeout(()=>{if(refreshPolicy().active&&['home','voice'].includes(state.route))marketVoice.syncRemote(false).then(()=>marketVoice.evaluate()).catch(()=>{});},5000);
   }
 }
 
 
 
-// ===== CACHE-FIRST BACKGROUND REFRESH / BROWSER RSS FALLBACK =====
+
+// ===== REFRESH V2: bounded continuous queues, visible tabs only =====
 window.__stockEdgeBg={running:false,intelRunning:false,done:0,total:0,failed:0,status:'idle',scheduled:false};
-function staleN225Codes(limit=999){
-  const now=Date.now(),cut=__modules.nikkei225.CACHE_HOURS*36e5;
-  return __modules.nikkei225.rows().map(r=>({code:r.code,error:!!r.error,t:Date.parse(r.fetchedAt||'')}))
-    .filter(x=>x.error||!Number.isFinite(x.t)||(now-x.t)>cut)
-    .sort((a,b)=>(Number(b.error)-Number(a.error))||((Number.isFinite(a.t)?a.t:0)-(Number.isFinite(b.t)?b.t:0)))
-    .slice(0,limit).map(x=>x.code);
+const refreshState={stockTimer:null,voiceTimer:null,stockFailures:0,voiceFailures:0,lastPaint:0,dirty:false,mode:'auto'};
+try{refreshState.mode=HTML_CONTEXT.storage.getItem('stock-edge-refresh-mode-v2')||'auto';}catch{}
+function refreshPolicy(){const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection||{};return EdgeRefresh.policy({mode:refreshState.mode,type:c.type,effectiveType:c.effectiveType,saveData:c.saveData,online:navigator.onLine!==false,hidden:document.hidden});}
+const networkGate=EdgeRefresh.createGate({fetch:window.fetch.bind(window),getPolicy:()=>({...refreshPolicy(),active:!document.hidden&&navigator.onLine!==false})});
+function edgeFetch(url,options){return networkGate.request(url,options);}
+window.stockEdgeRequest=edgeFetch;
+window.stockEdgeNetworkStats=()=>networkGate.stats();
+function refreshStockTtl(){
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tokyo',weekday:'short',hour:'numeric',hourCycle:'h23'}).formatToParts(new Date());
+ const weekday=parts.find(p=>p.type==='weekday')?.value,hour=Number(parts.find(p=>p.type==='hour')?.value);
+ return ['Sat','Sun'].includes(weekday)||hour<9||hour>=16?3600000:refreshPolicy().stockTtl;
 }
+function staleN225Codes(limit=999){
+ const now=Date.now(),cut=refreshStockTtl();
+ const watch=new Set((state.data?.watchlist||[]).map(x=>marketVoice.codeOfTicker(x.ticker)));
+ return __modules.nikkei225.rows().map(r=>({code:r.code,error:!!r.error,retryAt:Number(r.retryAt)||0,t:Date.parse(r.fetchedAt||'')}))
+  .filter(x=>x.retryAt<=now&&(x.error||!Number.isFinite(x.t)||now-x.t>cut))
+  .sort((a,b)=>(Number(watch.has(b.code))-Number(watch.has(a.code)))||((Number.isFinite(a.t)?a.t:0)-(Number.isFinite(b.t)?b.t:0)))
+  .slice(0,limit).map(x=>x.code);
+}
+function refreshControls(){return `<section class="refresh-controls" aria-label="自動更新"><div><strong data-refresh-summary></strong><small data-refresh-progress></small></div><label>更新モード <select data-refresh-mode><option value="auto" ${refreshState.mode==='auto'?'selected':''}>自動（Wi-Fi優先）</option><option value="continuous" ${refreshState.mode==='continuous'?'selected':''}>常時更新（Wi-Fi用）</option><option value="lite" ${refreshState.mode==='lite'?'selected':''}>省通信</option><option value="paused" ${refreshState.mode==='paused'?'selected':''}>自動更新を停止</option></select></label><small>回線を判別できない場合は「常時更新」を選択。表示中のみ継続し、非表示・オフラインでは休止します。</small></section>`;}
 function paintBackgroundStatus(){
-  const bg=window.__stockEdgeBg,txt=bg.running?`差分更新 ${bg.done}/${bg.total}`:bg.status==='done'?'差分更新済み':bg.status==='idle'?'保存データ表示中':'更新待ち';
-  document.querySelectorAll('#bg-refresh-status,[data-bg-status]').forEach(el=>el.textContent=txt);
+ const bg=window.__stockEdgeBg,p=refreshPolicy(),net=networkGate.stats();
+ const txt=bg.running?`株価更新 ${bg.done}/${bg.total}`:bg.status==='done'?'株価更新済み':'株価更新待ち';
+ document.querySelectorAll('#bg-refresh-status,[data-bg-status]').forEach(el=>el.textContent=txt);
+ document.querySelectorAll('[data-refresh-summary]').forEach(el=>el.textContent=p.label);
+ document.querySelectorAll('[data-refresh-progress]').forEach(el=>el.textContent=`${txt} · Voice ${bg.intelRunning?`${bg.intelDone||0}/${bg.intelTotal||0}検索`:bg.intelStatus==='failed'?'再試行待ち':'巡回待ち'} · 通信 ${net.active}/${p.limit}${refreshState.stockFailures||refreshState.voiceFailures?' · 失敗時は間隔を延長':''}`);
+}
+function queueRefreshPaint(){
+ refreshState.dirty=true;
+ if(Date.now()-refreshState.lastPaint<5000||state.loading||document.querySelector('input:focus,select:focus,textarea:focus')||!['home','ranking','voice'].includes(state.route))return;
+ refreshState.lastPaint=Date.now();refreshState.dirty=false;
+ render().catch(()=>{});
 }
 async function refreshN225Batch(codes,{foreground=false}={}){
-  if(!codes.length||__modules.nikkei225.isRunning())return false;
-  const bg=window.__stockEdgeBg;bg.running=true;bg.status='working';bg.done=0;bg.total=codes.length;bg.failed=0;paintBackgroundStatus();
-  try{
-    await __modules.nikkei225.scan({codes,onProgress:p=>{
-      bg.done=p.done;bg.total=p.total;bg.failed=p.failed;paintBackgroundStatus();
-      const x=document.getElementById('market-refresh-text');if(x)x.textContent=`${p.done}/${p.total}銘柄を差分更新中`;
-    }});
-    bg.status='done';return true;
-  }catch(_e){bg.status='cached';return false;}
-  finally{bg.running=false;paintBackgroundStatus();}
+ if(!codes.length||window.__stockEdgeBg.running||__modules.nikkei225.isRunning())return false;
+ const bg=window.__stockEdgeBg;bg.running=true;bg.status='working';bg.done=0;bg.total=codes.length;bg.failed=0;paintBackgroundStatus();
+ try{await __modules.nikkei225.scan({codes,maxAgeMs:refreshStockTtl(),concurrency:refreshPolicy().stockWorkers,shouldContinue:()=>refreshPolicy().active,onProgress:p=>{bg.done=p.done;bg.total=p.total;bg.failed=p.failed;paintBackgroundStatus();}});bg.status=bg.failed===bg.total?'cached':'done';return bg.failed<bg.total;}
+ catch(e){bg.status='cached';return false;}
+ finally{bg.running=false;paintBackgroundStatus();queueRefreshPaint();}
 }
+function scheduleStock(delay){clearTimeout(refreshState.stockTimer);if(refreshPolicy().active)refreshState.stockTimer=setTimeout(()=>backgroundN225Cycle().catch(()=>{}),delay);}
+function scheduleVoice(delay){clearTimeout(refreshState.voiceTimer);if(refreshPolicy().active)refreshState.voiceTimer=setTimeout(()=>backgroundVoiceCycle().catch(()=>{}),delay);}
 async function backgroundN225Cycle(){
-  const bg=window.__stockEdgeBg;if(bg.running||__modules.nikkei225.isRunning()||document.hidden)return;
-  // 操作を優先し、1回につき古い6銘柄だけを静かに更新する。
-  const batch=staleN225Codes(6);if(!batch.length){bg.status='done';paintBackgroundStatus();return;}
-  bg.total=batch.length;bg.done=0;bg.failed=0;bg.running=true;bg.status='working';paintBackgroundStatus();
-  try{
-    await __modules.nikkei225.scan({codes:batch,onProgress:p=>{bg.done=p.done;bg.total=p.total;bg.failed=p.failed;paintBackgroundStatus();}});
-    bg.status='done';
-  }catch(_e){bg.status='cached';}
-  finally{
-    bg.running=false;paintBackgroundStatus();
-    if(['home','ranking'].includes(state.route)&&!state.loading)await render();
-    // 外部ニュース取得はこの更新チェーンに連結しない。
-    // まだ古い銘柄が残っても、次の小分け更新まで十分に間隔を空ける。
-    if(staleN225Codes(1).length)setTimeout(()=>{if(!document.hidden&&['home','ranking'].includes(state.route))backgroundN225Cycle().catch(()=>{});},180000);
-  }
+ if(!refreshPolicy().active)return;
+ const bg=window.__stockEdgeBg,p=refreshPolicy();
+ if(bg.running||__modules.nikkei225.isRunning()){scheduleStock(2000);return;}
+ const batch=staleN225Codes(p.stockBatch);
+ if(!batch.length){bg.status='done';paintBackgroundStatus();scheduleStock(15000);return;}
+ const ok=await refreshN225Batch(batch);refreshState.stockFailures=ok?0:refreshState.stockFailures+1;
+ scheduleStock(ok?p.gap:EdgeRefresh.retryDelay(refreshState.stockFailures));
+}
+async function backgroundVoiceCycle(){
+ if(!refreshPolicy().active)return;
+ if(window.__stockEdgeBg.intelRunning){scheduleVoice(2000);return;}
+ try{await collectBrowserMarketIntel(false);refreshState.voiceFailures=window.__stockEdgeBg.intelStatus==='failed'?refreshState.voiceFailures+1:0;}
+ catch(e){refreshState.voiceFailures++;}
+ paintBackgroundStatus();scheduleVoice(refreshState.voiceFailures?EdgeRefresh.retryDelay(refreshState.voiceFailures):refreshPolicy().gap+1000);
+}
+function resumeRefresh(){
+ clearTimeout(refreshState.stockTimer);clearTimeout(refreshState.voiceTimer);
+ if(!refreshPolicy().active){networkGate.pause();__modules.nikkei225.stop();paintBackgroundStatus();return;}
+ networkGate.resume();scheduleStock(500);scheduleVoice(1200);paintBackgroundStatus();
 }
 function scheduleBackgroundRefresh(){
-  const bg=window.__stockEdgeBg;if(bg.scheduled)return;bg.scheduled=true;
-  // 最初の画面操作を最優先。30秒後、ホーム/ランキングにいる時だけ6銘柄更新。
-  setTimeout(()=>{if(!document.hidden&&['home','ranking'].includes(state.route))backgroundN225Cycle().catch(()=>{});},30000);
+ if(window.__stockEdgeBg.scheduled)return;window.__stockEdgeBg.scheduled=true;
+ document.addEventListener('visibilitychange',resumeRefresh);window.addEventListener('online',resumeRefresh);window.addEventListener('offline',resumeRefresh);
+ (navigator.connection||navigator.mozConnection||navigator.webkitConnection)?.addEventListener?.('change',resumeRefresh);
+ app.addEventListener('change',e=>{if(!e.target.matches('[data-refresh-mode]'))return;refreshState.mode=e.target.value;try{HTML_CONTEXT.storage.setItem('stock-edge-refresh-mode-v2',refreshState.mode);}catch{}resumeRefresh();});
+ resumeRefresh();
 }
 function marketIntelLocalLike(){return !/^https?:$/i.test(location.protocol||'');}
 function marketIntelSafeIso(value){const t=Date.parse(value||'');return Number.isFinite(t)&&t<=Date.now()+300000?new Date(t).toISOString():null;}
-async function fetchFeedText(url,timeout=12000){
-  const proxyPath='https://proxy.cors.dev/'+url;
-  const proxyQuery='https://proxy.cors.dev/?url='+encodeURIComponent(url);
-  const local=marketIntelLocalLike();
-  const routes=local?
-    [{url:proxyPath,route:'cors.dev'},{url:proxyQuery,route:'cors.dev-query'},{url,route:'direct'}]:
-    [{url,route:'direct'},{url:proxyPath,route:'cors.dev'},{url:proxyQuery,route:'cors.dev-query'}];
-  let last=null;
-  if(location.hostname==='127.0.0.1'&&location.port==='8765')routes.splice(0,routes.length,{url:'/api/feed?url='+encodeURIComponent(url),route:'local-relay'});
-  for(const item of routes){
-    const c=new AbortController(),timer=setTimeout(()=>c.abort(),timeout);
-    try{
-      const r=await fetch(item.url,{signal:c.signal,credentials:'omit',cache:'no-store',headers:{'Accept':'application/rss+xml, application/xml, text/xml, text/plain, */*'}});
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      const body=await r.text();
-      if(!/<(?:rss|feed)[\s>]/i.test(body))throw new Error('RSS items not found');
-      return {text:body,route:item.route,status:r.status};
-    }catch(e){last=e;}finally{clearTimeout(timer);}
-  }
-  throw last||new Error('RSS取得失敗');
+
+const feedCache=new Map(),feedInflight=new Map(),feedTransport=new Map(),feedRouteRetry=new Map();
+async function fetchFeedText(url,timeout=8000){
+ const cached=feedCache.get(url);if(cached&&Date.now()-cached.at<300000)return cached.value;
+ if(feedInflight.has(url))return feedInflight.get(url);
+ const work=(async()=>{
+  const host=new URL(url).host,local=location.hostname==='127.0.0.1'&&location.port==='8765';
+  let routes=local?[{url:'/api/feed?url='+encodeURIComponent(url),route:'local-relay'}]:[{url,route:'direct'},{url:'https://proxy.cors.dev/'+url,route:'cors.dev'},{url:'https://proxy.cors.dev/?url='+encodeURIComponent(url),route:'cors.dev-query'}];
+  const preferred=feedTransport.get(host);routes.sort((a,b)=>Number(b.route===preferred)-Number(a.route===preferred));let last;
+  for(const route of routes){const key=host+'|'+route.route;if((feedRouteRetry.get(key)||0)>Date.now())continue;
+   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeout);
+   try{const response=await window.stockEdgeRequest(route.url,{signal:ctrl.signal,credentials:'omit',cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const text=await response.text();if(!/<(?:rss|feed)[\s>]/i.test(text))throw Error('RSS形式ではありません');const value={text,route:route.route,status:response.status};feedTransport.set(host,route.route);feedCache.set(url,{at:Date.now(),value});if(feedCache.size>120)feedCache.delete(feedCache.keys().next().value);return value;}
+   catch(error){last=error;if(!document.hidden&&navigator.onLine!==false)feedRouteRetry.set(key,Date.now()+60000);}finally{clearTimeout(timer);}
+  }throw last||Error('RSS取得経路の再試行待ち');
+ })();feedInflight.set(url,work);try{return await work;}finally{feedInflight.delete(url);}
 }
 function rssText(node,sel){return node.querySelector(sel)?.textContent?.trim()||'';}
 function marketIntelReasons(body,stance){
@@ -2166,74 +2246,50 @@ function marketIntelDedupKey(p){
   const h=String(p.headline||p.raw||'').normalize('NFKC').toLowerCase().replace(/[\s　]+/g,' ').replace(/[「」『』【】\[\]（）()]/g,'').replace(/[0-9]{1,2}[:：][0-9]{2}/g,'').trim();
   return `${p.code}|${h.slice(0,100)}`;
 }
+
 function marketIntelCandidateRows(force,db){
-  const all=__modules.nikkei225.rows().filter(r=>Number.isFinite(r.score));
-  if(!all.length)return [];
-  const sorted=all.slice().sort((a,b)=>b.score-a.score),byCode=new Map(all.map(r=>[r.code,r])),picked=[],seen=new Set();
-  const add=r=>{if(r&&!seen.has(r.code)){seen.add(r.code);picked.push(r);}};
-  sorted.slice(0,force?8:4).forEach(add);
-  (state.data?.watchlist||[]).map(s=>marketVoice.codeOfTicker(s.ticker)).forEach(c=>add(byCode.get(c)));
-  const noVoice=sorted.filter(r=>marketVoice.metrics(r.code).voice.count===0&&marketVoice.metrics(r.code).material.count===0);
-  noVoice.slice(0,force?4:2).forEach(add);
-  const start=Number(db.collector?.rotationIndex)||0,rotation=sorted.length?sorted:all,rotCount=force?8:4;
-  for(let i=0;i<rotCount&&rotation.length;i++)add(rotation[(start+i)%rotation.length]);
-  return picked.slice(0,force?12:6);
+ const p=refreshPolicy(),all=__modules.nikkei225.rows().filter(r=>Number.isFinite(r.score)),now=Date.now(),scans=db.collector?.scans||{};
+ const watch=new Set((state.data?.watchlist||[]).map(s=>marketVoice.codeOfTicker(s.ticker)));
+ // Unscanned stocks always move ahead of recently checked stocks, including
+ // empty results. A top-ranked stock cannot starve the rest of the universe.
+ return all.filter(r=>force||(!scans[r.code]||(scans[r.code].retryAt||0)<=now&&now-(scans[r.code].at||0)>=p.voiceTtl))
+  .sort((a,b)=>((scans[a.code]?.at||0)-(scans[b.code]?.at||0))||(Number(watch.has(b.code))-Number(watch.has(a.code)))||b.score-a.score)
+  .slice(0,p.voiceBatch);
 }
-async function marketIntelPool(items,limit,worker,onStep){
-  let cursor=0,done=0;const out=[];
-  async function run(){while(true){const i=cursor++;if(i>=items.length)return;try{out[i]=await worker(items[i],i);}catch(e){out[i]={ok:false,error:e};}done++;onStep?.(done,items.length,out[i]);}}
-  await Promise.all(Array.from({length:Math.min(limit,items.length)},()=>run()));return out;
-}
+async function marketIntelPool(items,limit,worker,onStep){return EdgeRefresh.pool(items,limit,worker,{shouldContinue:()=>refreshPolicy().active,onStep});}
 async function collectBrowserMarketIntel(force=false){
-  const bg=window.__stockEdgeBg;if(bg.intelRunning)return marketVoice.read();
-  const db=marketVoice.read(),collector=db.collector||{},now=Date.now(),lastSuccess=Date.parse(collector.lastSuccessAt||''),lastAttempt=Date.parse(collector.lastAttemptAt||'');
-  const successTtl=30*60*1000,failedRetry=3*60*1000;
-  if(!force){
-    if(Number.isFinite(lastSuccess)&&now-lastSuccess<successTtl)return db;
-    if(!Number.isFinite(lastSuccess)&&Number.isFinite(lastAttempt)&&now-lastAttempt<failedRetry)return db;
-  }
-  const targets=marketIntelCandidateRows(force,db);if(!targets.length)return db;
-  bg.intelRunning=true;bg.intelDone=0;bg.intelTotal=targets.length;bg.intelFound=0;bg.intelFailed=0;bg.intelStatus='working';
-  collector.lastAttemptAt=new Date().toISOString();collector.lastScanned=targets.length;collector.lastFound=0;collector.lastFailed=0;collector.lastRoute='';collector.lastLensCount=0;db.collector=collector;marketVoice.write(db);
-  try{
-    const rotation=Number(collector.rotationIndex)||0;
-    const results=await marketIntelPool(targets,3,async r=>{
-      const lenses=marketIntelLenses(r,force,rotation),intel=[],routes=[],lensErrors=[];
-      for(const lens of lenses){
-        try{
-          const feed=marketIntelFeedUrl(lens.provider,lens.query),got=await fetchFeedText(feed,10000),doc=new DOMParser().parseFromString(got.text,'text/xml');
-          if(doc.querySelector('parsererror'))throw new Error('RSS parse error');
-          const items=[...doc.querySelectorAll('item, entry')].slice(0,force?5:3);
-          for(const item of items){try{const p=inferBrowserIntel(r.code,r.name||r.officialName||r.code,item,`${lens.provider}:${got.route}`,lens);if(p)intel.push(p);}catch(_e){}}
-          routes.push(`${lens.provider}:${got.route}`);
-        }catch(e){lensErrors.push(lens.id+': '+(e.message||'取得失敗'));}
-      }
-      const unique=new Map();for(const p of intel){const k=marketIntelDedupKey(p),old=unique.get(k);if(!old||Number(p.confidence)>Number(old.confidence))unique.set(k,p);}
-      return {ok:unique.size>0||lensErrors.length<lenses.length,route:[...new Set(routes)].join(','),code:r.code,intel:[...unique.values()],lenses:lenses.length,lensErrors};
-    },(done,total,res)=>{
-      bg.intelDone=done;bg.intelTotal=total;if(res?.ok)bg.intelFound+=(res.intel?.length||0);else bg.intelFailed++;
-      document.querySelectorAll('[data-mv-progress-text]').forEach(el=>el.textContent=`${done}/${total}銘柄 · ${bg.intelFound}件 · 複数チャネル収集中`);
-      document.querySelectorAll('[data-mv-progress-bar]').forEach(el=>el.style.width=(total?Math.round(done/total*100):0)+'%');
-    });
-    const rawFound=results.flatMap(x=>x?.ok?(x.intel||[]):[]),okResults=results.filter(x=>x?.ok),failed=results.length-okResults.length;
-    const merged=new Map();
-    for(const p of [...db.predictions,...rawFound]){const k=marketIntelDedupKey(p),old=merged.get(k);if(!old||Date.parse(p.publishedAt||p.createdAt||0)>=Date.parse(old.publishedAt||old.createdAt||0))merged.set(k,{...old,...p,createdAt:old?.createdAt||p.createdAt});}
-    const cutoff=Date.now()-45*86400000;
-    db.predictions=[...merged.values()].filter(p=>{const t=Date.parse(p.publishedAt||p.createdAt||'');return !Number.isFinite(t)||t>=cutoff||p.outcome!=='open';}).sort((a,b)=>String(b.publishedAt||b.createdAt||'').localeCompare(String(a.publishedAt||a.createdAt||''))).slice(0,1400);
-    const c=db.collector||{};c.lastAttemptAt=new Date().toISOString();c.lastScanned=targets.length;c.lastFound=rawFound.length;c.lastFailed=failed;c.lastRoute=[...new Set(okResults.flatMap(x=>String(x.route||'').split(',')).filter(Boolean))].slice(0,4).join(' / ');c.lensErrors=results.flatMap(x=>(x.lensErrors||[]).map(l=>x.code+': '+l));c.lastLensCount=results.reduce((a,x)=>a+(x?.lenses||0),0);c.rotationIndex=((Number(c.rotationIndex)||0)+(force?7:3))%Math.max(1,__modules.nikkei225.rows().length);
-    const channelCounts={analyst:0,official:0,community:0,video:0,media:0};for(const p of db.predictions)channelCounts[p.opinionChannel||'media']=(channelCounts[p.opinionChannel||'media']||0)+1;c.channelCounts=channelCounts;
-    if(rawFound.length){c.lastSuccessAt=new Date().toISOString();c.consecutiveEmpty=0;db.browserCollectedAt=c.lastSuccessAt;}else{c.consecutiveEmpty=(Number(c.consecutiveEmpty)||0)+1;}
-    db.collector=c;marketVoice.write(db);marketVoice.evaluate();
-    bg.intelStatus=rawFound.length?'done':(okResults.length?'empty':'failed');bg.intelFound=rawFound.length;bg.intelFailed=failed;
-    return db;
-  }finally{
-    bg.intelRunning=false;
-    if(state.route==='voice'&&!state.loading)render().catch(()=>{});
-  }
+ const bg=window.__stockEdgeBg;if(bg.intelRunning||document.hidden||navigator.onLine===false)return marketVoice.read();
+ const initial=marketVoice.read(),targets=marketIntelCandidateRows(force,initial);if(!targets.length){bg.intelStatus='idle';return initial;}
+ bg.intelRunning=true;bg.intelDone=0;bg.intelFound=0;bg.intelFailed=0;bg.intelStatus='working';
+ const rotation=Number(initial.collector?.rotationIndex)||0;
+ const jobs=targets.flatMap(r=>{const lenses=marketIntelLenses(r,force,rotation);return (force?lenses:[lenses[1],lenses[rotation%2===0?0:2],lenses[3]]).map(lens=>({r,lens}));});
+ bg.intelTotal=jobs.length;paintBackgroundStatus();
+ try{
+ const results=await EdgeRefresh.pool(jobs,refreshPolicy().voiceWorkers,async({r,lens})=>{
+  const feed=marketIntelFeedUrl(lens.provider,lens.query),got=await fetchFeedText(feed,8000),doc=new DOMParser().parseFromString(got.text,'text/xml');
+  if(doc.querySelector('parsererror'))throw Error('RSS parse error');
+  const intel=[];for(const item of [...doc.querySelectorAll('item, entry')].slice(0,force?8:5)){const prediction=inferBrowserIntel(r.code,r.name||r.officialName||r.code,item,`${lens.provider}:${got.route}`,lens);if(prediction)intel.push(prediction);}
+  return {ok:true,code:r.code,route:`${lens.provider}:${got.route}`,intel};
+ },{shouldContinue:()=>!document.hidden&&navigator.onLine!==false&&(force||refreshPolicy().active),onStep:(done,total,res)=>{
+  bg.intelDone=done;bg.intelFound+=res?.intel?.length||0;if(!res?.ok)bg.intelFailed++;paintBackgroundStatus();
+  document.querySelectorAll('[data-mv-progress-text]').forEach(el=>el.textContent=`${done}/${total}検索 · ${bg.intelFound}件 · 並列巡回中`);
+  document.querySelectorAll('[data-mv-progress-bar]').forEach(el=>el.style.width=Math.round(done/total*100)+'%');
+ }});
+ const completed=results.filter(Boolean),ok=completed.filter(x=>x.ok),rawFound=ok.flatMap(x=>x.intel),db=marketVoice.read(),c=db.collector||{},merged=new Map();
+ for(const prediction of [...db.predictions,...rawFound]){const k=marketIntelDedupKey(prediction),old=merged.get(k);if(!old||Date.parse(prediction.publishedAt||prediction.createdAt||0)>=Date.parse(old.publishedAt||old.createdAt||0))merged.set(k,{...old,...prediction,createdAt:old?.createdAt||prediction.createdAt});}
+ db.predictions=[...merged.values()].filter(p=>EdgeModel.age(p.publishedAt||p.createdAt,Date.now())<=45||p.outcome!=='open').sort((a,b)=>String(b.publishedAt||b.createdAt).localeCompare(String(a.publishedAt||a.createdAt))).slice(0,1400);
+ c.scans=c.scans||{};let scanned=0;
+ for(const r of targets){const indices=jobs.map((job,i)=>job.r.code===r.code?i:-1).filter(i=>i>=0);if(!indices.every(i=>results[i]))continue;scanned++;const success=indices.some(i=>results[i]?.ok),failures=success?0:(c.scans[r.code]?.failures||0)+1;c.scans[r.code]={at:success?Date.now():0,retryAt:success?0:Date.now()+EdgeRefresh.retryDelay(failures),failures};}
+ c.lastAttemptAt=new Date().toISOString();c.lastScanned=scanned;c.lastFound=rawFound.length;c.lastFailed=completed.length-ok.length;c.lastLensCount=completed.length;c.rotationIndex=rotation+1;
+ c.lensErrors=completed.flatMap((res,i)=>res.ok?[]:[jobs[i]?.r.code+': '+(res.error?.message||'取得失敗')]).slice(0,40);
+ c.lastRoute=[...new Set(ok.map(x=>x.route))].join(' / ');c.channelCounts={};for(const p of db.predictions)c.channelCounts[p.opinionChannel||'media']=(c.channelCounts[p.opinionChannel||'media']||0)+1;
+ if(ok.length){c.lastSuccessAt=new Date().toISOString();c.consecutiveEmpty=0;db.browserCollectedAt=c.lastSuccessAt;}else c.consecutiveEmpty=(c.consecutiveEmpty||0)+1;
+ db.collector=c;marketVoice.write(db);bg.intelStatus=ok.length?(rawFound.length?'done':'empty'):'failed';return db;
+ }finally{bg.intelRunning=false;paintBackgroundStatus();queueRefreshPaint();}
 }
 function instantHome(){
   const mod=__modules.nikkei225,s=mod.stats(),rows=mod.rows().filter(r=>Number.isFinite(r.score)),top=v4TopRows(rows,3),newest=s.ok.map(r=>r.dataAsOf).filter(Boolean).sort().at(-1)||'—';
-  return `<div class="v4-dashboard"><header class="v4-hero"><div><div class="eyebrow">TODAY INTELLIGENCE</div><h1>今日、見るべき銘柄</h1><p>保存済みデータを先に表示しています。更新完了を待つ必要はありません。</p></div><div class="v4-hero-actions"><span class="v4-status"><i></i>保存データを即表示</span></div></header><div class="v4-summary"><div class="v4-summary-item"><span>株価基準日</span><strong>${esc(newest)}</strong><small>保存済み</small></div><div class="v4-summary-item"><span>日経225</span><strong>${s.coverage}/225</strong><small>取得済み</small></div><div class="v4-summary-item"><span>起動</span><strong>即表示</strong><small>更新は裏側</small></div></div><section class="v4-section"><div class="v4-section-head"><div><h2>調査候補 TOP 3</h2><p>充足度を反映した暫定スコア順。利益実績による順位ではありません。</p></div></div><div class="v4-top-grid">${top.length?top.map((x,i)=>v4StockCard(x.r,i)).join(''):'<div class="v4-empty" style="grid-column:1/-1"><strong>初回データを準備中</strong>画面は止めず、日経225を裏側で少しずつ取得します。</div>'}</div></section></div>`;
+  return `<div class="v4-dashboard"><header class="v4-hero"><div><div class="eyebrow">TODAY INTELLIGENCE</div><h1>今日、見るべき銘柄</h1><p>保存済みデータを先に表示しています。更新完了を待つ必要はありません。</p></div><div class="v4-hero-actions"><span class="v4-status"><i></i>保存データを即表示</span></div></header><div class="v4-summary"><div class="v4-summary-item"><span>株価基準日</span><strong>${esc(newest)}</strong><small>保存済み</small></div><div class="v4-summary-item"><span>日経225</span><strong>${s.coverage}/225</strong><small>取得済み</small></div><div class="v4-summary-item"><span>起動</span><strong>即表示</strong><small>更新は裏側</small></div></div><section class="v4-section"><div class="v4-section-head"><div><h2>調査候補 TOP 3</h2><p>充足度を反映した暫定スコア順。利益実績による順位ではありません。</p></div></div><div class="v4-top-grid">${top.length?top.map((x,i)=>v4StockCard(x.r,i)).join(''):'<div class="v4-empty" style="grid-column:1/-1"><strong>初回データを準備中</strong>画面は止めず、日経225を裏側で連続して取得します。</div>'}</div></section></div>`;
 }
 
 
@@ -2245,8 +2301,10 @@ async function runUnifiedMarketRefresh(button){
   if(button)button.disabled=true;
   const original=button?.textContent;if(button)button.textContent='差分更新中…';
   try{
-    const codes=staleN225Codes(18);
+    if(window.__stockEdgeBg.running||__modules.nikkei225.isRunning()){scheduleVoice(500);toast("株価は更新中です。完了後も残りを継続します");return;}
+    const codes=staleN225Codes(refreshPolicy().stockBatch);
     if(codes.length)await refreshN225Batch(codes,{foreground:true});
+    scheduleStock(1000);scheduleVoice(1000);
     collectBrowserMarketIntel(true).catch(()=>{});
     if(/^https?:$/i.test(location.protocol))marketVoice.syncRemote(true).then(()=>marketVoice.evaluate()).catch(()=>{});
     await render();
@@ -2344,7 +2402,7 @@ function updateResults() {
   document.querySelector('#stock-results').innerHTML=tableStocks(filtered,isWatch);document.querySelector('#result-count').textContent=`${filtered.length} / ${items.length}`;
 }
 app.addEventListener('input',event=>{if(event.target.id==='stock-filter'){state.query=event.target.value;updateResults();}});
-app.addEventListener('change',event=>{if(event.target.id==='stock-sort'){state.sort=event.target.value;updateResults();}if(event.target.id==='n225-sort'){state.n225Sort=event.target.value;updateResults();}if(event.target.id==='n225-auto'){__modules.nikkei225.saveSettings({auto:event.target.checked});toast(event.target.checked?'日経225の自動更新をONにしました':'日経225の自動更新をOFFにしました');}});
+app.addEventListener('change',event=>{if(event.target.id==='stock-sort'){state.sort=event.target.value;updateResults();}if(event.target.id==='n225-sort'){state.n225Sort=event.target.value;updateResults();}if(event.target.id==='n225-auto'){__modules.nikkei225.saveSettings({auto:event.target.checked});refreshState.mode=event.target.checked?'auto':'paused';try{HTML_CONTEXT.storage.setItem('stock-edge-refresh-mode-v2',refreshState.mode);}catch{}resumeRefresh();toast(event.target.checked?'日経225の自動更新をONにしました':'日経225の自動更新をOFFにしました');}});
 app.addEventListener('change',event=>{if(event.target.id==='price-basis'){state.basis=event.target.value;state.history=null;render();}});
 app.addEventListener('input',event=>{if(event.target.id==='market-query') state.marketQuery=event.target.value;});
 
@@ -2457,7 +2515,7 @@ app.addEventListener('click',async event=>{
   if(button.dataset.action==='fetch-reference') {
     button.disabled=true;button.textContent='外部CSVを取得中…';const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
     try {
-      const response=await fetch(__modules.dataEvidence.REFERENCE_URL,{signal:controller.signal,credentials:'omit',cache:'no-store',redirect:'error'});
+      const response=await window.stockEdgeRequest(__modules.dataEvidence.REFERENCE_URL,{signal:controller.signal,credentials:'omit',cache:'no-store',redirect:'error'});
       if(!response.ok)throw new Error('外部CSVの取得に失敗しました：HTTP '+response.status);
       const blob=await response.blob();if(blob.size>5*1024*1024)throw new Error('外部CSVが大きすぎます。');
       const record=__modules.dataEvidence.parsePrices(await blob.text(),{ticker:'AAPL',market:'US',company:'Apple / 公開過去データ',provider:'reference',basis:'raw',source_url:__modules.dataEvidence.REFERENCE_URL,file_name:'finance-charts-apple.csv'});
@@ -2547,7 +2605,7 @@ async function startReference() {
   try {
     const previous=workspace.read().records.AAPL;
     if(previous&&previous.stock.source!=='FILE_REFERENCE')throw new Error('AAPLの保存済みデータがあります。お試しでは上書きしません。「ファイルを読み込む」の保存一覧から開いてください。');
-    const response=await fetch(__modules.dataEvidence.REFERENCE_URL,{signal:controller.signal,credentials:'omit',cache:'no-store',redirect:'error'});
+    const response=await window.stockEdgeRequest(__modules.dataEvidence.REFERENCE_URL,{signal:controller.signal,credentials:'omit',cache:'no-store',redirect:'error'});
     if(!response.ok)throw new Error('外部CSVを取得できませんでした（HTTP '+response.status+'）。時間を置いて再試行してください。');
     const blob=await response.blob();if(blob.size>5*1024*1024)throw new Error('外部CSVのサイズが上限を超えています。');
     const record=__modules.dataEvidence.parsePrices(await blob.text(),{ticker:'AAPL',market:'US',company:'Apple / 公開過去データ',provider:'reference',basis:'raw',source_url:__modules.dataEvidence.REFERENCE_URL,file_name:'finance-charts-apple.csv'});
@@ -2623,10 +2681,10 @@ boot();
 // 財務は起動をブロックしない。保存済み画面を先に出し、上位候補だけ静かに差分更新する。
 setTimeout(async()=>{
   try{
-    if(document.hidden||state.route!=='home')return;
+    if(!refreshPolicy().active||state.route!=='home')return;
     const rows=__modules.nikkei225.rows().filter(r=>Number.isFinite(r.score)).sort((a,b)=>(b.score||0)-(a.score||0));
     const missing=rows.filter(r=>!financialIntel.cached(r.code)).slice(0,2).map(r=>r.code);
-    if(missing.length){await financialIntel.refreshBatch(missing,{force:false,limit:2,concurrency:1});if(state.route==='home')await render();}
+    if(missing.length){await financialIntel.refreshBatch(missing,{force:false,limit:2,concurrency:1});if(state.route==='home')queueRefreshPaint();}
   }catch(e){console.warn('[FINANCIAL warmup]',e?.message||e);}
 },60000);
 

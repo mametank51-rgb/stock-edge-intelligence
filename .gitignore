@@ -3,6 +3,12 @@ public/
 *.zip
 *-detail.png
 upgrade.py
+upgrade-refresh.py
+finish-refresh.py
+tune-refresh.py
+browser-refresh-smoke.cjs
+github-pages-public.png
+refresh-preview.png
 smoke.cjs
 STOCK_EDGE_INTELLIGENCE_EVOLVED.html
 .env
