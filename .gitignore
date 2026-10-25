@@ -1,0 +1,11 @@
+node_modules/
+public/
+*.zip
+*-detail.png
+upgrade.py
+smoke.cjs
+STOCK_EDGE_INTELLIGENCE_EVOLVED.html
+.env
+.env.*
+!.env.example
+*.log

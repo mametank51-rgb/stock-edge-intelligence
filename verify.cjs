@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const M=require('./edge-model.js');
+const now=Date.parse('2026-10-25T00:00:00Z'),fresh='2026-10-23';
+assert.equal(M.classify('上方修正と下方修正が混在'),'neutral');
+assert.equal(M.classify('目標株価を引き下げ'),'bearish');
+assert.equal(M.relevant('7203','トヨタ自動車','17203という数値'),false);
+assert.equal(M.relevant('7203','トヨタ自動車','トヨタ自動車が増配'),true);
+const p={headline:'企業が増配',publisher:'媒体A',publishedAt:fresh,stance:'bullish',opinionChannel:'analyst'};
+assert.equal(M.metric([p,{...p}],now).count,1);
+assert.equal(M.metric([{...p,publishedAt:null}],now).score,null);
+assert.equal(M.metric([{...p,publishedAt:'2026-10-26'}],now).score,null);
+assert.equal(M.metric([{...p,publishedAt:'2025-01-01'}],now).score,null);
+const partial=M.composite({tech:90,fund:null,voice:null,priceDate:fresh},now);
+assert.equal(partial.overall,70);assert.equal(partial.confidence,50);
+assert.equal(M.composite({tech:90,priceDate:'2025-01-01'},now).overall,null);
+const full=M.composite({tech:90,fund:90,voice:90,priceDate:fresh,fundDate:'2026-03-31',voiceWeight:2},now);
+assert.equal(full.overall,90);assert.equal(full.confidence,100);
+const trade=M.position({capital:1000000,riskPct:1,entry:1000,stop:950,target:1100,lot:100,costBps:20});
+assert.equal(trade.shares,100);assert.ok(trade.maxLoss<=10000);
+assert.throws(()=>M.position({capital:1e6,riskPct:1,entry:100,stop:100,target:110,lot:100,costBps:20}));
+const html=fs.readFileSync(fs.existsSync('index.html')?'index.html':'STOCK_EDGE_INTELLIGENCE_EVOLVED.html','utf8');let scripts=0;
+for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){new vm.Script(m[1]);scripts++;}
+assert.ok(scripts>=2);assert.ok(html.includes('${decisionPanel(row)}'));
+console.log('PASS: 17 model assertions, inline JavaScript syntax ('+scripts+' scripts).');

@@ -1,0 +1,12 @@
+{
+  "name": "stock-edge-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "description": "日本株の分析・情報比較を支援するHTMLダッシュボード",
+  "scripts": {
+    "start": "node server.cjs",
+    "test": "node verify.cjs",
+    "build": "node build.cjs"
+  },
+  "engines": { "node": ">=22" }
+}
