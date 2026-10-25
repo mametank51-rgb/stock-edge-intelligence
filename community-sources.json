@@ -1,0 +1,15 @@
+[
+  {"id":"mikimaru","owner":"mikimaru","name":"みきまるの優待バリュー株日誌","style":"優待・バリュー / 銘柄研究","home":"https://plaza.rakuten.co.jp/mikimaru71/","feed":"https://api.plaza.rakuten.ne.jp/mikimaru71/rss/"},
+  {"id":"kabu1000","owner":"kabu1000","name":"かぶ１０００投資日記","style":"バリュー / 運用記録","home":"https://plaza.rakuten.co.jp/kabu1000/","feed":"https://api.plaza.rakuten.ne.jp/kabu1000/rss/"},
+  {"id":"seiyan","owner":"seiyan","name":"投資逍遥","style":"企業研究 / 投資考察","home":"https://plaza.rakuten.co.jp/seiyan36/","feed":"https://api.plaza.rakuten.ne.jp/seiyan36/rss/"},
+  {"id":"6suke","owner":"6suke","name":"ろくすけの長期投資の旅","style":"長期投資 / 企業訪問","home":"https://6suke.com/","feed":"https://6suke.com/feed/"},
+  {"id":"enafun","owner":"enafun","name":"エナフンさんの梨の木","style":"成長株 / 投資の考え方","home":"https://ameblo.jp/okuyama-tukito/","feed":"https://ameblo.jp/okuyama-tukito/rss.html"},
+  {"id":"21century","owner":"21century","name":"21世紀投資","style":"優待・イベント / 企業分析","home":"https://ameblo.jp/v-com2/","feed":"https://ameblo.jp/v-com2/rss.html"},
+  {"id":"vis2004","owner":"vis2004","name":"Value Investment since 2004","style":"決算 / 企業価値の検討","home":"https://vis2004.blog.fc2.com/","feed":"https://vis2004.blog.fc2.com/?xml"},
+  {"id":"inujiro","owner":"inujiro","name":"犬次郎株日誌","style":"運用記録 / 投資考察","home":"https://kabuinujiro.blog.fc2.com/","feed":"https://kabuinujiro.blog.fc2.com/?xml"},
+  {"id":"2oku-blog","owner":"2oku","name":"弐億貯男の株式投資で目指せ億万長者！","style":"企業分析 / 売買・運用記録","home":"https://kabu2oku.doorblog.jp/","feed":"https://kabu2oku.doorblog.jp/index.rdf"},
+  {"id":"2oku-note","owner":"2oku","name":"弐億貯男（note）","style":"投資の考え方 / 初心者向け","home":"https://note.com/2okutameo","feed":"https://note.com/2okutameo/rss"},
+  {"id":"kibinago","owner":"kibinago","name":"株主優待と高配当株を買い続ける株式投資ブログ","style":"高配当 / 優待・運用記録","home":"https://kibinago7777.blogspot.com/","feed":"https://kibinago7777.blogspot.com/feeds/posts/default?alt=rss"},
+  {"id":"longgoodbuy","owner":"longgoodbuy","name":"The Long Good Buy","style":"長期投資 / 企業価値・読書","home":"https://tekitoutoushi.blogspot.com/","feed":"https://tekitoutoushi.blogspot.com/feeds/posts/default?alt=rss"},
+  {"id":"mu","owner":"mu","name":"長期投資家むうの学び","style":"長期投資 / 経済・投資考察","home":"https://soshikikaranosotugyou.blogspot.com/","feed":"https://soshikikaranosotugyou.blogspot.com/feeds/posts/default?alt=rss"}
+]

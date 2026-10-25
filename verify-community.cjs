@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),M=require('./edge-model'),V=require('./voice-view');
+const data=JSON.parse(fs.readFileSync('community-data.json','utf8'));
+const memory=new Map(),context={URL,Date,JSON,EdgeModel:M,localStorage:{getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)},location:{protocol:'https:'},document:{hidden:false},navigator:{onLine:true}};
+vm.runInNewContext(fs.readFileSync('community-runtime.js','utf8'),context);const B=context.StockEdgeCommunity;B.setSeed(data);
+assert.equal(B.snapshot().sources.length,13);assert.equal(new Set(data.sources.map(s=>s.owner)).size,12);assert.ok(B.items().length>0);
+const before=B.items().length,id=B.items()[0].sourceId;B.toggle(id,false);assert.ok(B.items().length<before);B.toggle(id,true);assert.equal(B.items().length,before);
+const base={communityFeed:true,scope:'market',code:'',sourceCategory:'voice',opinionChannel:'community',headline:'個人の投資考察',publisher:'ブログA',sourceGroup:'a',sourceId:'a',url:'https://example.com/one',publishedAt:new Date().toISOString()};
+const global=V.prepare([base],{classify:M.classify})[0];assert.ok(global);assert.equal(global.eligible,false);assert.equal(global.fresh,true);assert.equal(V.select([global],{code:'7203'}).length,0);
+const list=V.prepare([base,{...base,headline:'ブログAの別記事',url:'https://example.com/two'},{...base,headline:'ブログB',url:'https://example.com/three',publisher:'ブログB',sourceGroup:'b',sourceId:'b'}],{classify:M.classify});
+assert.equal(V.select(list,{kind:'blog'})[1].sourceGroup,'b');assert.equal(V.select(list,{kind:'blog',source:'b'}).length,1);
+const opinions=[{headline:'強気1',publisher:'Blog',sourceGroup:'same',publishedAt:new Date().toISOString(),stance:'bullish',opinionChannel:'community'},{headline:'強気2',publisher:'Note',sourceGroup:'same',publishedAt:new Date().toISOString(),stance:'bullish',opinionChannel:'community'}];assert.equal(M.metric(opinions).sources,1);
+assert.throws(()=>B.valid({schema:'bad'}));
+(async()=>{context.stockEdgeRequest=async()=>{throw Error('offline')};await B.sync(true);assert.equal(B.items().length,before);assert.match(B.error,/offline/);console.log('PASS: blog snapshot, mute, market scope, diversity, source filter, author grouping, failure cache.');})().catch(e=>{console.error(e);process.exitCode=1;});

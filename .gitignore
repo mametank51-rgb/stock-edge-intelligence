@@ -23,3 +23,10 @@ sync-voice.py
 voice-reader-smoke.cjs
 voice-reader-preview.png
 voice-public.png
+probe-community.py
+integrate-community.py
+community-preview.png
+community-browser-smoke.cjs
+finish-community.py
+polish-community.py
+__pycache__/

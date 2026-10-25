@@ -20,8 +20,8 @@ const server=http.createServer(async(req,res)=>{
   if(req.headers.origin&&req.headers.origin!=='http://127.0.0.1:8765'){res.writeHead(403);res.end();return;}
   try{const target=new URL(u.searchParams.get('url'));if(!valid(target))throw Error('Feed URL denied');const k=target.href,old=cache.get(k);let body;if(old&&Date.now()-old.at<300000)body=old.body;else{body=await feed(target);if(cache.size>200)cache.delete(cache.keys().next().value);cache.set(k,{at:Date.now(),body});}res.writeHead(200,{'Content-Type':'application/xml; charset=utf-8'});res.end(body);}catch(e){res.writeHead(502,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:e.message}));}return;
  }
- const files={'/':'index.html','/index.html':'index.html','/STOCK_EDGE_INTELLIGENCE_EVOLVED.html':'index.html'};
+ const files={'/':'index.html','/index.html':'index.html','/STOCK_EDGE_INTELLIGENCE_EVOLVED.html':'index.html','/community-data.json':'community-data.json'};
  if(!files[u.pathname]){res.writeHead(404);res.end();return;}
- res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});fs.createReadStream(path.join(__dirname,files[u.pathname])).pipe(res);
+ res.writeHead(200,{'Content-Type':u.pathname.endsWith('.json')?'application/json; charset=utf-8':'text/html; charset=utf-8'});fs.createReadStream(path.join(__dirname,files[u.pathname])).pipe(res);
 });
 server.listen(8765,'127.0.0.1',()=>console.log('Stock Edge: http://127.0.0.1:8765 (Ctrl+C to stop)'));

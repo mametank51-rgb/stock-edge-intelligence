@@ -21,7 +21,7 @@ function metric(items,now=Date.now()){
  for(const p of items){if(age(p.publishedAt,now)>30||age(p.publishedAt,now)<0)continue;const k=key(p);if(k&&!unique.has(k))unique.set(k,p);}
  const sources=new Map();let bull=0,bear=0,neutral=0,total=0,w=0;
  for(const p of unique.values()){
-   const source=String(p.publisher||p.author||'不明').trim().toLowerCase();
+   const source=String(p.sourceGroup||p.publisher||p.author||'不明').trim().toLowerCase();
    const a=sources.get(source)||[];a.push(p);sources.set(source,a);
  }
  for(const group of sources.values())for(const p of group){
