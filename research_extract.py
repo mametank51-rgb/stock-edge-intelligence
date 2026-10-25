@@ -9,8 +9,10 @@ import re
 import unicodedata
 import threading
 import time
+import hashlib
+import calendar
 
-VERSION = 3
+VERSION = 4
 AGENT = 'StockEdgeResearch/1.0'
 VOID = {'br','hr','img','input','meta','link','wbr','source','area','base','embed','param','track','col'}
 class ArticleParser(HTMLParser):
@@ -60,6 +62,29 @@ UP=re.compile(r'割安|増益|増収|上方修正|増配|自社株買い|最高�
 DOWN=re.compile(r'割高|減益|減収|下方修正|減配|赤字|悪化|リスク|懸念')
 NEGATE=re.compile(r'(?:割安|増益|増収|好調|成長)(?:で(?:は|も)|と(?:は|も))?ない|(?:減益|赤字|懸念|リスク)(?:で(?:は|も)|と(?:は|も)|は)?ない|割安とは言え|増益とは言え')
 NEGATED_TERM=re.compile(r'(?:割高(?:感)?|割安(?:感)?|減益|減収|増益|増収|赤字|リスク|懸念|悪化)(?:が|は|も|の|でも|では|とは|とも)?(?:あまり|ほとんど)?(?:ありません|ありえない|ない|なく|見当たらない|見られない|認められない)')
+NUMBER=r'([+-]?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]+)?)'
+def structured_statement(sentence):
+    periods=set(re.findall(r'(20[0-9]{2})(?:年|/)\s*([0-9]{1,2})(?:月期|期)',sentence))
+    periods={(int(y),int(m)) for y,m in periods if 1<=int(m)<=12}
+    end='';label='・'.join(f'{y}年{m}月期' for y,m in sorted(periods))
+    if len(periods)==1:
+        year,month=next(iter(periods));end=f'{year:04d}-{month:02d}-{calendar.monthrange(year,month)[1]:02d}'
+    if not label:label='年度未特定の今期・来期' if re.search(r'今期|来期|前期',sentence) else '対象期不明'
+    forecast=bool(re.search(r'予想|計画|見込|見通し|会社側は|想定|目指|予定',sentence));actual=bool(re.search(r'実績|着地|確定|だった|となった|となりました',sentence))
+    nature='mixed' if forecast and actual else 'forecast' if forecast else 'actual' if actual else 'unspecified'
+    attribution='会社予想への言及（一次開示未照合）' if re.search(r'会社(?:の|側の)?(?:予想|計画)|会社側',sentence) else '著者の記述・解釈'
+    metrics=[]
+    patterns=[('per','PER',r'(?:予想|実績)?PER\s*'+NUMBER,'倍'),('pbr','PBR',r'PBR\s*'+NUMBER,'倍'),('yield','配当利回り',r'配当利回り\s*'+NUMBER+r'\s*%','%'),('eps','EPS',r'EPS\s*'+NUMBER+r'\s*円','円'),('price','記事中株価',r'株価(?:は|が|:)?\s*'+NUMBER+r'\s*円','円'),('operatingProfitGrowth','営業利益増減率',r'営業利益(?!率)[^。]{0,28}?(?:前年比|前年同期比|前期比)\s*'+NUMBER+r'\s*%','%'),('revenueGrowth','売上増減率',r'売上(?:高)?[^。]{0,28}?(?:前年比|前年同期比|前期比)\s*'+NUMBER+r'\s*%','%')]
+    for measure,name,pattern,unit in patterns:
+        match=re.search(pattern,sentence,re.I)
+        if not match:continue
+        if re.match(r'\s*(?:~|〜|～|から|[-－])\s*[0-9]',sentence[match.end():]):continue
+        value=float(match.group(1).replace(',',''))
+        if measure.endswith('Growth') and re.match(r'\s*(?:減|減少)',sentence[match.end():]):value=-abs(value)
+        metric_nature=nature if measure.endswith('Growth') else 'unspecified'
+        if measure=='per':metric_nature='forecast' if re.search(r'予想PER',match.group(0),re.I) else 'actual' if re.search(r'実績PER',match.group(0),re.I) else 'unspecified'
+        metrics.append({'measure':measure,'name':name,'value':value,'unit':unit,'nature':metric_nature})
+    return {'periodLabel':label[:100],'periodEnd':end,'nature':nature,'attribution':attribution,'metrics':metrics[:6]}
 def evidence(title, body, code='', company='', basis='rss'):
     text=norm(title)+'\n'+norm(body)
     sentences=[re.sub(r'\s+',' ',s).strip() for s in re.split(r'[。！？\n]+',text[:16000]) if s.strip()]
@@ -92,10 +117,14 @@ def evidence(title, body, code='', company='', basis='rss'):
         up=bool(UP.search(affirmed));down=bool(DOWN.search(affirmed))
         polarity='unclear' if NEGATE.search(sentence) or up==down else 'support' if up else 'caution'
         claim={'kind':kind,'label':label,'polarity':polarity,'excerpt':excerpt}
+        claim.update(structured_statement(sentence))
+        claim['sourceSentence']=sentences.index(sentence)+1
+        claim['evidenceHash']=hashlib.sha256(sentence.encode()).hexdigest()
         if kind=='condition':claim['conditionType']='invalidation' if re.search(r'損切り|撤退|見送|下回|下方修正|悪化|未達',sentence) else 'assumption'
         claims.append(claim)
     identities=subjects(title,body,code,company)
-    return {'version':VERSION,'basis':basis,'subjects':identities,'claims':claims,'singleSubject':len(identities)==1,'coverage':'本文の一部' if basis=='article' else 'RSSの範囲','checkedAt':datetime.now(timezone.utc).isoformat()}
+    for claim in claims:claim['entityScope']='single-subject' if len(identities)==1 else 'unassigned'
+    return {'version':VERSION,'basis':basis,'subjects':identities,'claims':claims,'singleSubject':len(identities)==1,'coverage':'本文の一部' if basis=='article' else 'RSSの範囲','checkedAt':datetime.now(timezone.utc).isoformat(),'documentHash':hashlib.sha256(text.encode()).hexdigest()}
 
 def allowed_article(url, source):
     try:

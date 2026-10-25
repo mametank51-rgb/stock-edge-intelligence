@@ -43,3 +43,12 @@ research-provenance-polish.py
 research-final-sync.py
 fix-research-doc.py
 research-negation-sync.py
+integrate-lab.py
+finish-lab.py
+lab-browser-smoke.cjs
+lab-preview.png
+lab-adapter-finish.py
+lab-polish.py
+lab-empty-state.py
+lab-style-fix.py
+refresh-lab-seed.py

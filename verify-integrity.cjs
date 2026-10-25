@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),I=require('./market-integrity');
+const now=Date.parse('2026-10-25T03:00:00Z'),row={date:'2026-10-23',open:100,high:110,low:95,close:105,volume:1000,adjustedClose:100};
+const payload={meta:{symbol:'7203.T',currency:'JPY'},basis:'split-adjusted',rows:[row],events:{splits:{x:{date:Date.parse('2026-10-23')/1000,numerator:2,denominator:1}}}};
+let s=I.normalize(payload,{code:'7203',now});assert.equal(s.identityVerified,true);assert.equal(s.basis,'split-adjusted');assert.equal(I.splitAdjusted(s)[0].close,105,'do not split-adjust a second time');
+assert.throws(()=>I.normalize({...payload,meta:{symbol:'6758.T',currency:'JPY'}},{code:'7203',now}));assert.throws(()=>I.normalize({...payload,meta:{symbol:'7203.T',currency:'USD'}},{code:'7203',now}));
+assert.throws(()=>I.normalize({...payload,rows:[{...row,close:null}]},{code:'7203',now}));assert.throws(()=>I.normalize({...payload,rows:[{...row,high:99}]},{code:'7203',now}));assert.throws(()=>I.normalize({...payload,rows:[row,{...row,close:103}]},{code:'7203',now}));
+assert.equal(I.normalize({...payload,rows:[row,row]},{code:'7203',now}).rows.length,1);assert.equal(I.day('2026-02-31'),'');assert.equal(I.day('2026-02-28'),'2026-02-28');
+assert.throws(()=>I.normalize({...payload,events:{splits:{x:{date:1,numerator:2,denominator:0}}}},{code:'7203',now}));
+const actual={nature:'actual',periodLabel:'2026年3月期',periodEnd:'2026-03-31',metrics:[{measure:'operatingProfitGrowth',value:20,unit:'%'}]};
+assert.equal(I.claimAudit(actual,{fund:{latest:{date:'2026-03-31'},kpi:{opYoy:20.5}}})[0].state,'consistent');
+assert.equal(I.claimAudit({...actual,nature:'forecast'},{fund:{latest:{date:'2026-03-31'},kpi:{opYoy:20}}})[0].state,'unmatched');
+assert.equal(I.claimAudit(actual,{fund:{latest:{date:'2025-03-31'},kpi:{opYoy:20}}})[0].state,'unmatched');
+assert.equal(I.claimAudit({...actual,metrics:[{measure:'per',value:10,nature:'forecast'}]},{})[0].state,'different-basis');
+console.log('PASS: identity, JPY, OHLC, nulls, duplicates, dates, corporate-action metadata and matching period/forecast basis.');

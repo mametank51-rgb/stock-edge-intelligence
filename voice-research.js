@@ -1,15 +1,16 @@
 /* Evidence-led research queue. No predicted returns, buy signals, or author win rates. */
 (function(root){
 'use strict';
+const Integrity=typeof module!=='undefined'&&module.exports?require('./market-integrity.js'):root.MarketIntegrity;
 const clean=v=>String(v??'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
 const codeOf=v=>/^[1-9][0-9]{3}$|^[1-9][0-9]{2}[A-Z]$/.test(String(v||''))?String(v):'';
 const number=v=>typeof v==='number'&&Number.isFinite(v);
 const age=(v,now)=>{const t=Date.parse(v||'');return Number.isFinite(t)&&t<=now+300000?(now-t)/86400000:Infinity;};
 function canonical(value){try{const u=new URL(value);if(!['https:','http:'].includes(u.protocol)||u.username||u.password)return '';u.hash='';for(const k of [...u.searchParams.keys()])if(/^utm_|^(fbclid|gclid)$/.test(k))u.searchParams.delete(k);return u.href;}catch{return '';}}
 const validKinds=new Set(['valuation','growth','return','catalyst','risk','condition']);
-function claimsOf(article){return ([1,2,3].includes(article.research?.version)&&Array.isArray(article.research.claims)?article.research.claims:[]).filter(c=>validKinds.has(c.kind)&&clean(c.excerpt)).slice(0,6).map(c=>({...c,label:clean(c.label).slice(0,30),excerpt:clean(c.excerpt).slice(0,90),polarity:['support','caution'].includes(c.polarity)?c.polarity:'unclear',url:canonical(article.url),publisher:clean(article.publisher),owner:clean(article.sourceGroup||article.publisher),date:article.publishedAt,basis:article.research.basis==='article'?'公開本文の一部':'RSSの範囲'}));}
+function claimsOf(article){return ([1,2,3,4].includes(article.research?.version)&&Array.isArray(article.research.claims)?article.research.claims:[]).filter(c=>validKinds.has(c.kind)&&clean(c.excerpt)).slice(0,6).map(c=>({...c,label:clean(c.label).slice(0,30),excerpt:clean(c.excerpt).slice(0,90),polarity:['support','caution'].includes(c.polarity)?c.polarity:'unclear',url:canonical(article.url),publisher:clean(article.publisher),owner:clean(article.sourceGroup||article.publisher),date:article.publishedAt,basis:article.research.basis==='article'?'公開本文の一部':'RSSの範囲'}));}
 function identity(article){
- const subjects=[1,2,3].includes(article.research?.version)&&Array.isArray(article.research.subjects)?article.research.subjects:[];
+ const subjects=[1,2,3,4].includes(article.research?.version)&&Array.isArray(article.research.subjects)?article.research.subjects:[];
  if(subjects.length===1&&codeOf(subjects[0].code))return {code:codeOf(subjects[0].code),name:clean(subjects[0].name).slice(0,70),verified:article.code===subjects[0].code,basis:clean(subjects[0].basis)};
  // Multiple-company articles cannot provide company-specific causal evidence.
  if(subjects.length>1)return null;
@@ -27,7 +28,7 @@ function compare(idea,quote={},fund={},now=Date.now()){
  const fundFresh=age(fundDate,now)<=550;
  if(fundFresh&&number(k.opYoy)){
   const profitClaim=idea.claims.some(c=>c.kind==='growth'&&c.polarity==='support');
-  checks.push({kind:profitClaim&&k.opYoy<0?'caution':'fact',label:profitClaim&&k.opYoy<0?'記事の成長論と年次財務を要照合':'取得済み年次財務',text:`営業利益 前年比 ${k.opYoy>=0?'+':''}${k.opYoy.toFixed(1)}%${number(k.revYoy)?' / 売上 '+(k.revYoy>=0?'+':'')+k.revYoy.toFixed(1)+'%':''}。記事の予想と対象期間が異なる場合があります。`,date:fundDate});
+  checks.push({kind:'fact',label:'取得済み年次財務（記事との期間一致は別途確認）',text:`営業利益 前年比 ${k.opYoy>=0?'+':''}${k.opYoy.toFixed(1)}%${number(k.revYoy)?' / 売上 '+(k.revYoy>=0?'+':'')+k.revYoy.toFixed(1)+'%':''}。記事の予想と対象期間が異なる場合があります。`,date:fundDate});
  }else tasks.push('直近決算で売上・営業利益と会社予想を確認');
  if(has('valuation')){
   if(quoteFresh&&fundFresh&&(number(k.pe)||number(k.pbr)))checks.push({kind:'fact',label:'取得済み財務による価格指標',text:[number(k.pe)?'PER '+k.pe.toFixed(1)+'倍':'',number(k.pbr)?'PBR '+k.pbr.toFixed(2)+'倍':''].filter(Boolean).join(' / ')+'。ブログ記載時点とは基準が異なります。',date:fundDate});
@@ -39,6 +40,8 @@ function compare(idea,quote={},fund={},now=Date.now()){
  if(!idea.claims.some(c=>c.kind==='condition'&&c.conditionType==='invalidation'))tasks.push('見送り・仮説を撤回する条件を自分で決める');
  if(idea.writers<2)tasks.push('1人の見解です。別の情報源から反証を探す');
  if(!idea.bodyCount)tasks.push('RSSのみ。元記事の本文で評価理由を確認');
+ for(const claim of idea.claims.filter(c=>c.metrics?.length)){for(const audit of Integrity.claimAudit(claim,{fund,quote})){if(!checks.some(c=>c.text===audit.text))checks.push({kind:audit.state==='review'?'caution':'fact',label:audit.label,text:audit.text,date:claim.periodEnd||'期間未照合'});}}
+ if(quoteFresh&&!quote.priceBasis)tasks.push('価格の調整基準が未記録。再取得して分割調整の扱いを確認');
  return {checks,tasks:[...new Set(tasks)],quoteFresh,overheat,fundFresh};
 }
 function build(items,{quotes={},fundamentals={},journal={},now=Date.now()}={}){

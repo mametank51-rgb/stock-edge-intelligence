@@ -1,5 +1,5 @@
 import unittest
-from research_extract import ArticleParser,evidence,subjects,allowed_article
+from research_extract import ArticleParser,evidence,subjects,allowed_article,structured_statement
 class ResearchTests(unittest.TestCase):
  def test_body_scope(self):
   p=ArticleParser();p.feed('<nav>割安の広告</nav><div class="article-body entry-content"><p>会社の営業利益は増益。</p><script>赤字</script><aside>広告</aside><p>価格改定の効果。</p></div><footer>投資リスク</footer><div class="article-body">別の記事</div>')
@@ -33,4 +33,14 @@ class ResearchTests(unittest.TestCase):
   self.assertTrue(any(c['kind']=='risk' and c['polarity']=='caution' for c in r['claims']))
   r=evidence('企業研究','PER12倍で割安と考える'+('長い理由'*50))
   self.assertTrue(next(c for c in r['claims'] if c['kind']=='valuation')['excerpt'].endswith('…'))
+ def test_period_and_nature_and_units(self):
+  r=structured_statement('2026年3月期の実績は営業利益が前期比20%増となりました')
+  self.assertEqual(r['nature'],'actual');self.assertEqual(r['periodEnd'],'2026-03-31');self.assertEqual(r['metrics'][0]['value'],20);self.assertEqual(r['metrics'][0]['unit'],'%')
+  r=structured_statement('2027年3月期の会社予想は営業利益が前期比10%減を見込む')
+  self.assertEqual(r['nature'],'forecast');self.assertEqual(r['metrics'][0]['value'],-10)
+  r=structured_statement('今期予想PER11.31、PBR1.52、配当利回り4.0%')
+  self.assertEqual(r['periodEnd'],'');self.assertEqual(r['metrics'][0]['measure'],'per');self.assertEqual(r['metrics'][0]['nature'],'forecast')
+  r=structured_statement('2025年3月期実績と2026年3月期予想を比較する')
+  self.assertEqual(r['nature'],'mixed');self.assertEqual(r['periodEnd'],'')
+  self.assertEqual(structured_statement('PER10～15倍が想定レンジ')['metrics'],[])
 if __name__=='__main__':unittest.main()

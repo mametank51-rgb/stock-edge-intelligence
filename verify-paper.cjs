@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),P=require('./paper-engine');
+const dates=['2026-10-16','2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23'];
+const series=(code,prices)=>({schema:'stock-edge-price-series-v1',code,currency:'JPY',basis:'split-adjusted',identityVerified:true,rejectedRows:0,rows:dates.map((date,i)=>({date,open:prices[i],close:prices[i],high:prices[i]+1,low:prices[i]-1,volume:100,adjustedClose:prices[i]})),actions:[],source:'https://example.com/price'});
+const stock=series('7203',[900,100,110,90,120,130]),bench=series('1306',[500,100,101,102,103,104]);
+const snapshot={schema:'stock-edge-decision-v1',code:'7203',recordedAt:'2026-10-16T14:00:00Z',holdBars:5,capital:1000000,costBps:20,unitModel:'fractional-adjusted',benchmark:'1306',scores:{overall:75}};
+const now=Date.parse('2026-10-25T03:00:00Z');
+let r=P.evaluate(snapshot,stock,bench,{now});assert.equal(r.entryDate,'2026-10-19');assert.equal(r.exitDate,'2026-10-23');assert.equal(r.state,'complete');assert.ok(Math.abs(r.returnPct-((130/100)*.998/1.002-1)*100)<1e-9);assert.ok(r.maxDrawdownPct<-18);assert.ok(r.excessPct>25);
+assert.equal(P.evaluate(snapshot,stock,bench,{now:Date.parse('2026-10-23T10:00:00Z')}).state,'running','today must remain excluded even after market close');
+assert.equal(P.evaluate({...snapshot,recordedAt:'2026-10-25T01:00:00Z'},stock,bench,{now}).state,'waiting');
+assert.equal(P.evaluate(snapshot,{...stock,rows:stock.rows.filter(x=>x.date!=='2026-10-20')},bench,{now}).state,'missing');
+assert.equal(P.evaluate(snapshot,{...stock,rejectedRows:1},bench,{now}).state,'missing');assert.equal(P.evaluate(snapshot,stock,null,{now}).state,'missing');
+assert.equal(P.evaluate(snapshot,{...stock,rows:stock.rows.map(({adjustedClose,...rest})=>rest)},bench,{now}).state,'missing');
+const split={...stock,actions:[{date:'2026-10-21',type:'split',ratio:10},{date:'2026-10-22',type:'dividend',amount:100}]};assert.equal(P.evaluate(snapshot,split,bench,{now}).returnPct,r.returnPct,'already-adjusted prices must not receive events twice');
+const empty=P.summary([]);assert.equal(empty.meanReturn,null);assert.equal(empty.winRate,null);assert.equal(empty.total,0);
+(async()=>{const t=await P.seal(snapshot);await P.validateTrial(t);const tampered=structuredClone(t);tampered.snapshot.holdBars=20;await assert.rejects(P.validateTrial(tampered));const first=await P.recordEvaluation(t,r),same=await P.recordEvaluation(first,{...r,calculatedAt:'2026-10-26'});assert.equal(same.revisions.length,0);const changedResult=structuredClone(first);changedResult.current.returnPct=99;await assert.rejects(P.validateTrial(changedResult));const revision=await P.recordEvaluation(first,{...r,returnPct:30});assert.equal(revision.revisions.length,1);assert.equal(revision.snapshotHash,t.snapshotHash);assert.equal(P.summary([first]).complete,1);assert.equal(P.summary([first]).scoreBuckets[2].n,1);console.log('PASS: next-session entry, immutable conditions/hash, costs, benchmark, drawdown, completed bars, missing data, no double adjustment, revisions and empty summaries.');})().catch(e=>{console.error(e);process.exitCode=1;});
