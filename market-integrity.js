@@ -39,7 +39,8 @@ function splitAdjusted(series){
 }
 function completeRows(series,now=Date.now()){return (series?.rows||[]).filter(r=>r.date<today(now));}
 function claimAudit(claim,{fund={},quote={}}={}){
- const checks=[],metrics=Array.isArray(claim.metrics)?claim.metrics:[],period=claim.periodEnd||'',fundDate=fund.latest?.date||'';
+ claim=claim&&typeof claim==='object'?claim:{};fund=fund&&typeof fund==='object'?fund:{};
+ const checks=[],metrics=(Array.isArray(claim.metrics)?claim.metrics:[]).filter(m=>m&&typeof m==='object'&&!Array.isArray(m)&&finite(m.value)),period=claim.periodEnd||'',fundDate=fund.latest?.date||'';
  for(const m of metrics){
   let actual=null;
   if(m.measure==='operatingProfitGrowth')actual=fund.kpi?.opYoy;
@@ -49,8 +50,8 @@ function claimAudit(claim,{fund={},quote={}}={}){
   }
   if(m.measure==='pbr'){checks.push({state:'different-basis',label:'PBRの株価・純資産の時点を確認',text:'PBRは株価と1株当たり純資産の時点・株数が必要です。記事と保存財務の基準が一致するまでは、数値の正誤比較を行いません。'});continue;}
   if(!['operatingProfitGrowth','revenueGrowth'].includes(m.measure))continue;
-  if(claim.nature!=='actual'||!period||period!==fundDate||m.unit!=='%'||!finite(actual)){
-   checks.push({state:'unmatched',label:'対象期・実績／予想の照合待ち',text:'記事 '+(claim.periodLabel||'対象期不明')+' / '+(({actual:'実績',forecast:'予想',mixed:'実績・予想が混在'})[claim.nature]||'区分不明')+'。保存財務 '+(fundDate||'未取得')+' と同条件で比較できません。'});continue;
+  if(claim.nature!=='actual'||claim.periodScope!=='annual'||!period||period!==fundDate||m.unit!=='%'||!finite(actual)){
+   checks.push({state:'unmatched',label:'対象期・集計期間・実績／予想の照合待ち',text:'記事 '+(claim.periodLabel||'対象期不明')+' / '+(({annual:'通期',quarter:'四半期',half:'半期',mixed:'集計期間が混在'})[claim.periodScope]||'集計期間不明')+' / '+(({actual:'実績',forecast:'予想',mixed:'実績・予想が混在'})[claim.nature]||'区分不明')+'。保存年次財務 '+(fundDate||'未取得')+' と同条件で比較できません。'});continue;
   }
   const delta=Math.abs(actual-m.value);checks.push({state:delta<=1?'consistent':'review',label:delta<=1?'同じ対象期の数値が概ね一致':'同じ対象期の数値に差があります',text:'記事 '+m.value+'% / 保存財務 '+actual.toFixed(1)+'%。会計範囲・修正値を一次資料で確認してください。'});
  }

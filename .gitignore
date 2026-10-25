@@ -57,3 +57,6 @@ debug-ui-fixes.py
 debug-hidden-style.py
 debug-restore-attempt.py
 debug-evidence-version.py
+
+debug-more-browser-smoke.cjs
+debug-draft-preview.png

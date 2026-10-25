@@ -49,4 +49,7 @@ class ResearchTests(unittest.TestCase):
   r=structured_statement('2026年3月期実績は売上高100億円、営業利益が前期比30%増となりました')
   self.assertFalse(any(m['measure']=='revenueGrowth' for m in r['metrics']))
   self.assertEqual(next(m for m in r['metrics'] if m['measure']=='operatingProfitGrowth')['value'],30)
+ def test_annual_quarterly_and_half_year_periods_are_distinct(self):
+  for sentence,scope in [('2026年3月期の実績は営業利益が前期比20%増となりました','annual'),('2026年3月期第1四半期の実績は営業利益が前年比20%増となりました','quarter'),('2026年3月期2Q累計の実績は営業利益が前年比20%増となりました','quarter'),('2026年3月期上期の実績は営業利益が前年比20%増となりました','half'),('2026年3月期第1四半期実績と通期計画を比較する','mixed'),('営業利益が前年比20%増となりました','unknown')]:
+   self.assertEqual(structured_statement(sentence)['periodScope'],scope,sentence)
 if __name__=='__main__':unittest.main()

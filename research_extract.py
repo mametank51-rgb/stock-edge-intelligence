@@ -12,7 +12,7 @@ import time
 import hashlib
 import calendar
 
-VERSION = 5
+VERSION = 6
 AGENT = 'StockEdgeResearch/1.0'
 VOID = {'br','hr','img','input','meta','link','wbr','source','area','base','embed','param','track','col'}
 class ArticleParser(HTMLParser):
@@ -70,6 +70,11 @@ def structured_statement(sentence):
     if len(periods)==1:
         year,month=next(iter(periods));end=f'{year:04d}-{month:02d}-{calendar.monthrange(year,month)[1]:02d}'
     if not label:label='年度未特定の今期・来期' if re.search(r'今期|来期|前期',sentence) else '対象期不明'
+    quarter=bool(re.search(r'四半期|[1-4]\s*Q(?:\b|累計|実績|決算)',sentence,re.I))
+    half=bool(re.search(r'上期|下期|(?<!四)半期|中間期|中間決算|中間実績',sentence))
+    annual=bool(re.search(r'通期',sentence)) or bool(re.search(r'年度',sentence)) and not (quarter or half)
+    scope='mixed' if sum((quarter,half,annual))>1 else 'quarter' if quarter else 'half' if half else 'annual' if annual or len(periods)==1 else 'unknown'
+    if scope in ('quarter','half','mixed'):label+=' / '+{'quarter':'四半期','half':'半期','mixed':'集計期間が混在'}[scope]
     forecast=bool(re.search(r'予想|計画|見込|見通し|会社側は|想定|目指|予定',sentence));actual=bool(re.search(r'実績|着地|確定|だった|となった|となりました',sentence))
     nature='mixed' if forecast and actual else 'forecast' if forecast else 'actual' if actual else 'unspecified'
     attribution='会社予想への言及（一次開示未照合）' if re.search(r'会社(?:の|側の)?(?:予想|計画)|会社側',sentence) else '著者の記述・解釈'
@@ -87,7 +92,7 @@ def structured_statement(sentence):
         metric_nature=nature if measure.endswith('Growth') else 'unspecified'
         if measure=='per':metric_nature='forecast' if re.search(r'予想PER',match.group(0),re.I) else 'actual' if re.search(r'実績PER',match.group(0),re.I) else 'unspecified'
         metrics.append({'measure':measure,'name':name,'value':value,'unit':unit,'nature':metric_nature})
-    return {'periodLabel':label[:100],'periodEnd':end,'nature':nature,'attribution':attribution,'metrics':metrics[:6]}
+    return {'periodLabel':label[:100],'periodEnd':end,'periodScope':scope,'nature':nature,'attribution':attribution,'metrics':metrics[:6]}
 def evidence(title, body, code='', company='', basis='rss'):
     text=norm(title)+'\n'+norm(body)
     sentences=[re.sub(r'\s+',' ',s).strip() for s in re.split(r'[。！？\n]+',text[:16000]) if s.strip()]

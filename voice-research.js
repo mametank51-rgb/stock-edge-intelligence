@@ -5,27 +5,30 @@ const Integrity=typeof module!=='undefined'&&module.exports?require('./market-in
 const clean=v=>String(v??'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
 const codeOf=v=>/^[1-9][0-9]{3}$|^[1-9][0-9]{2}[A-Z]$/.test(String(v||''))?String(v):'';
 const number=v=>typeof v==='number'&&Number.isFinite(v);
+const record=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
 const age=(v,now)=>{const t=Date.parse(v||'');return Number.isFinite(t)&&t<=now+300000?(now-t)/86400000:Infinity;};
 function canonical(value){try{const u=new URL(value);if(!['https:','http:'].includes(u.protocol)||u.username||u.password)return '';u.hash='';for(const k of [...u.searchParams.keys()])if(/^utm_|^(fbclid|gclid)$/.test(k))u.searchParams.delete(k);return u.href;}catch{return '';}}
 const validKinds=new Set(['valuation','growth','return','catalyst','risk','condition']);
-function claimsOf(article){return ([1,2,3,4,5].includes(article.research?.version)&&Array.isArray(article.research.claims)?article.research.claims:[]).filter(c=>validKinds.has(c.kind)&&clean(c.excerpt)).slice(0,6).map(c=>({...c,metrics:article.research.version>=5&&Array.isArray(c.metrics)?c.metrics:[],label:clean(c.label).slice(0,30),excerpt:clean(c.excerpt).slice(0,90),polarity:['support','caution'].includes(c.polarity)?c.polarity:'unclear',url:canonical(article.url),publisher:clean(article.publisher),owner:clean(article.sourceGroup||article.publisher),date:article.publishedAt,basis:article.research.basis==='article'?'公開本文の一部':'RSSの範囲'}));}
+function claimsOf(article){return ([1,2,3,4,5,6].includes(article?.research?.version)&&Array.isArray(article.research.claims)?article.research.claims:[]).filter(c=>c&&typeof c==='object'&&validKinds.has(c.kind)&&clean(c.excerpt)).slice(0,6).map(c=>({...c,metrics:article.research.version>=6&&Array.isArray(c.metrics)?c.metrics.filter(m=>m&&typeof m==='object'&&number(m.value)).slice(0,6):[],label:clean(c.label).slice(0,30),excerpt:clean(c.excerpt).slice(0,90),polarity:['support','caution'].includes(c.polarity)?c.polarity:'unclear',url:canonical(article.url),publisher:clean(article.publisher),owner:clean(article.sourceGroup||article.publisher),date:article.publishedAt,basis:article.research.basis==='article'?'公開本文の一部':'RSSの範囲'}));}
 function identity(article){
- const subjects=[1,2,3,4,5].includes(article.research?.version)&&Array.isArray(article.research.subjects)?article.research.subjects:[];
+ const subjects=[1,2,3,4,5,6].includes(article?.research?.version)&&Array.isArray(article.research.subjects)?article.research.subjects:[];
+ if(subjects.some(s=>!s||typeof s!=='object'||!codeOf(s.code)))return codeOf(article.code)?{code:article.code,name:clean(article.company||article.code),verified:true,basis:'銘柄別に収集した記事'}:null;
  if(subjects.length===1&&codeOf(subjects[0].code))return {code:codeOf(subjects[0].code),name:clean(subjects[0].name).slice(0,70),verified:article.code===subjects[0].code,basis:clean(subjects[0].basis)};
  // Multiple-company articles cannot provide company-specific causal evidence.
  if(subjects.length>1)return null;
  return codeOf(article.code)?{code:article.code,name:clean(article.company||article.code),verified:true,basis:'銘柄別に収集した記事'}:null;
 }
 function compare(idea,quote={},fund={},now=Date.now()){
+ quote=record(quote);fund=record(fund);
  const checks=[],tasks=[],has=k=>idea.claims.some(c=>c.kind===k);
- const quoteFresh=number(quote.price)&&quote.price>0&&age(quote.dataAsOf,now)<=7;
+ const quoteAge=age(quote.dataAsOf,now),quoteFresh=number(quote.price)&&quote.price>0&&quoteAge>=0&&quoteAge<=7;
  let overheat=false;
  if(quoteFresh){
   overheat=number(quote.rsi)&&quote.rsi>=70||number(quote.m20)&&quote.m20>=15;
   checks.push({kind:overheat?'caution':'fact',label:overheat?'株価の過熱を先に確認':'保存株価と照合',text:`株価 ¥${quote.price.toLocaleString('ja-JP')}${number(quote.m20)?' / 20日 '+(quote.m20>=0?'+':'')+quote.m20.toFixed(1)+'%':''}${number(quote.rsi)?' / RSI '+quote.rsi.toFixed(1):''}`,date:quote.dataAsOf});
  }else tasks.push('株価が未取得または7日超。現在の価格・過熱を更新');
  const k=fund.kpi||{},fundDate=fund.latest?.date||fund.record?.annual?.map(x=>x.date).filter(Boolean).sort().at(-1)||'';
- const fundFresh=age(fundDate,now)<=550;
+ const fundAge=age(fundDate,now),fundFresh=fundAge>=0&&fundAge<=550;
  if(fundFresh&&number(k.opYoy)){
   const profitClaim=idea.claims.some(c=>c.kind==='growth'&&c.polarity==='support');
   checks.push({kind:'fact',label:'取得済み年次財務（記事との期間一致は別途確認）',text:`営業利益 前年比 ${k.opYoy>=0?'+':''}${k.opYoy.toFixed(1)}%${number(k.revYoy)?' / 売上 '+(k.revYoy>=0?'+':'')+k.revYoy.toFixed(1)+'%':''}。記事の予想と対象期間が異なる場合があります。`,date:fundDate});

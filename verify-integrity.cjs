@@ -6,7 +6,7 @@ assert.throws(()=>I.normalize({...payload,meta:{symbol:'6758.T',currency:'JPY'}}
 assert.throws(()=>I.normalize({...payload,rows:[{...row,close:null}]},{code:'7203',now}));assert.throws(()=>I.normalize({...payload,rows:[{...row,high:99}]},{code:'7203',now}));assert.throws(()=>I.normalize({...payload,rows:[row,{...row,close:103}]},{code:'7203',now}));
 assert.equal(I.normalize({...payload,rows:[row,row]},{code:'7203',now}).rows.length,1);assert.equal(I.day('2026-02-31'),'');assert.equal(I.day('2026-02-28'),'2026-02-28');
 assert.throws(()=>I.normalize({...payload,events:{splits:{x:{date:1,numerator:2,denominator:0}}}},{code:'7203',now}));
-const actual={nature:'actual',periodLabel:'2026年3月期',periodEnd:'2026-03-31',metrics:[{measure:'operatingProfitGrowth',value:20,unit:'%'}]};
+const actual={nature:'actual',periodScope:'annual',periodLabel:'2026年3月期',periodEnd:'2026-03-31',metrics:[{measure:'operatingProfitGrowth',value:20,unit:'%'}]};
 assert.equal(I.claimAudit(actual,{fund:{latest:{date:'2026-03-31'},kpi:{opYoy:20.5}}})[0].state,'consistent');
 assert.equal(I.claimAudit({...actual,nature:'forecast'},{fund:{latest:{date:'2026-03-31'},kpi:{opYoy:20}}})[0].state,'unmatched');
 assert.equal(I.claimAudit(actual,{fund:{latest:{date:'2025-03-31'},kpi:{opYoy:20}}})[0].state,'unmatched');
