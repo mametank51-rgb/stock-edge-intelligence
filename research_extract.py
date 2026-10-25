@@ -12,7 +12,7 @@ import time
 import hashlib
 import calendar
 
-VERSION = 4
+VERSION = 5
 AGENT = 'StockEdgeResearch/1.0'
 VOID = {'br','hr','img','input','meta','link','wbr','source','area','base','embed','param','track','col'}
 class ArticleParser(HTMLParser):
@@ -78,6 +78,9 @@ def structured_statement(sentence):
     for measure,name,pattern,unit in patterns:
         match=re.search(pattern,sentence,re.I)
         if not match:continue
+        if measure.endswith('Growth'):
+            prefix=re.sub(r'^(?:営業利益|売上高?)','',match.group(0))
+            if re.search(r'営業利益|純利益|経常利益|粗利益|利益率|EPS|配当|売上',prefix,re.I):continue
         if re.match(r'\s*(?:~|〜|～|から|[-－])\s*[0-9]',sentence[match.end():]):continue
         value=float(match.group(1).replace(',',''))
         if measure.endswith('Growth') and re.match(r'\s*(?:減|減少)',sentence[match.end():]):value=-abs(value)

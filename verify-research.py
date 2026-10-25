@@ -43,4 +43,10 @@ class ResearchTests(unittest.TestCase):
   r=structured_statement('2025年3月期実績と2026年3月期予想を比較する')
   self.assertEqual(r['nature'],'mixed');self.assertEqual(r['periodEnd'],'')
   self.assertEqual(structured_statement('PER10～15倍が想定レンジ')['metrics'],[])
+ def test_growth_is_not_taken_from_a_neighboring_metric(self):
+  r=structured_statement('2026年3月期実績は営業利益10億円、純利益が前期比20%増となりました')
+  self.assertFalse(any(m['measure']=='operatingProfitGrowth' for m in r['metrics']))
+  r=structured_statement('2026年3月期実績は売上高100億円、営業利益が前期比30%増となりました')
+  self.assertFalse(any(m['measure']=='revenueGrowth' for m in r['metrics']))
+  self.assertEqual(next(m for m in r['metrics'] if m['measure']=='operatingProfitGrowth')['value'],30)
 if __name__=='__main__':unittest.main()

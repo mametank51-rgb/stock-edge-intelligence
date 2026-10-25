@@ -22,11 +22,11 @@ function prepare(items,{now=Date.now(),classify}={}){
   const code=codeOf(raw.code);if(!code&&!(raw.communityFeed&&raw.scope==='market'))continue;
   const headline=text(raw.headline||raw.raw||'見出しなし').slice(0,600),stamp=Date.parse(raw.publishedAt||''),days=(now-stamp)/86400000;
   if(skipArticle(code,headline))continue;
-  const dated=Number.isFinite(stamp)&&stamp<=now+300000,fresh=dated&&days<=30;
+  const dated=Number.isFinite(stamp)&&stamp<=now+300000,fresh=dated&&days>=0&&days<=30;
   const legacy=!!raw.browserAuto&&raw.extractionVersion!==2;
   const category=raw.sourceCategory==='voice'?'voice':'material';
   const stance=raw.browserAuto&&classify?classify(headline):['bullish','bearish'].includes(raw.stance)?raw.stance:'neutral';
-  const record={...raw,code,headline,company:text(raw.company||code),publisher:text(raw.publisher||raw.author||'媒体不明'),author:text(raw.browserAuto?raw.feedAuthor:raw.author),targetPrice:raw.communityFeed?null:raw.browserAuto?extractTargetPrice(headline+' '+text(raw.summary)):raw.targetPrice,summary:text(raw.summary).slice(0,700),reasons:(Array.isArray(raw.reasons)?raw.reasons:[]).map(text).filter(Boolean).slice(0,5),url:safeUrl(raw.url),stamp:dated?stamp:0,fresh,eligible:fresh&&!legacy&&!!code,category,stance,quality:legacy?'旧収集形式':!dated?'公表日不明':!fresh?'30日超':raw.communityFeed&&!code?'ブログ閲覧用・個別銘柄の採点対象外':'見出し判定',key:raw.communityFeed?'blog|'+safeUrl(raw.url):code+'|'+headline.normalize('NFKC').toLowerCase().replace(/[\s「」『』【】]/g,'')};
+  const record={...raw,code,headline,company:text(raw.company||code),publisher:text(raw.publisher||raw.author||'媒体不明'),author:text(raw.browserAuto?raw.feedAuthor:raw.author),targetPrice:raw.communityFeed?null:raw.browserAuto?extractTargetPrice(headline+' '+text(raw.summary)):raw.targetPrice,summary:text(raw.summary).slice(0,700),reasons:(Array.isArray(raw.reasons)?raw.reasons:[]).map(text).filter(Boolean).slice(0,5),url:safeUrl(raw.url),stamp:dated?stamp:0,fresh,eligible:fresh&&!legacy&&!!code,category,stance,quality:legacy?'旧収集形式':Number.isFinite(stamp)&&stamp>now?'公表時刻が未来':!dated?'公表日不明':!fresh?'30日超':raw.communityFeed&&!code?'ブログ閲覧用・個別銘柄の採点対象外':'見出し判定',key:raw.communityFeed?'blog|'+safeUrl(raw.url):code+'|'+headline.normalize('NFKC').toLowerCase().replace(/[\s「」『』【】]/g,'')};
   const old=map.get(record.key);if(!old||record.stamp>old.stamp)map.set(record.key,record);
  }
  return [...map.values()].sort((a,b)=>Number(b.category==='voice')-Number(a.category==='voice')||b.stamp-a.stamp);
