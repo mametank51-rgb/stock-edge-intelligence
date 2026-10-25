@@ -11,5 +11,12 @@ assert.equal(V.codeOf('65010'),'6501');assert.equal(V.codeOf('6500'),'6500');ass
 assert.equal(V.safeUrl('javascript:alert(1)'),'');assert.equal(V.safeUrl('https://password:secret@example.com'),'');
 assert.equal(V.status({items:[],scan:{at:1}}).kind,'empty');assert.equal(V.status({items:[],scan:{failures:1}}).kind,'failed');assert.equal(V.status({items:[],requested:true}).kind,'working');
 assert.equal(V.prepare([{...base,publishedAt:'2027-01-01'}],{now}).at(0).fresh,false);
+assert.equal(V.extractTargetPrice('SHIFT 国内証券が目標株価上げ 3697'),null);
+assert.equal(V.extractTargetPrice('目標株価2,600円に引下げ'),2600);
+assert.equal(V.extractTargetPrice('目標株価を2,400円から2,800円に引上げ'),2800);
+assert.equal(V.extractTargetPrice('目標株価は￥3,500に引上げ'),3500);
+assert.equal(V.extractTargetPrice('目標株価2,400円〜2,800円'),null);
+assert.equal(M.relevant('9434','ソフトバンク','ソフトバンクG株は割安か'),false);
+assert.equal(V.prepare([{...base,headline:'スズキ：企業情報（決算時期・代表者名）'}],{now}).length,0);
 const html=fs.readFileSync('index.html','utf8').replace(/\r\n/g,'\n');assert.ok(html.includes(fs.readFileSync('voice-view.js','utf8').replace(/\r\n/g,'\n')));
 console.log('PASS: Voice deduplication, mixed headlines, freshness, filtering, status, ticker codes, safe links, embedded view model.');
