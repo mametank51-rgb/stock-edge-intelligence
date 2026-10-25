@@ -1,0 +1,94 @@
+// Embedded inside the app scope by upgrade-voice.py.
+let voiceUiVersion=0,voicePreparedVersion=-1,voicePreparedMinute=-1,voicePreparedItems=[];
+const voiceFilters={query:'',kind:'all',stance:'all',period:'fresh',limit:24};
+const voicePriorityCodes=new Set();
+function invalidateVoicePresentation(){voiceUiVersion++;}
+function resetVoiceFilters(){Object.assign(voiceFilters,{query:'',kind:'all',stance:'all',period:'fresh',limit:24});state.voiceFilter='';}
+function voiceRecords(){
+ const minute=Math.floor(Date.now()/60000);
+ if(voicePreparedVersion!==voiceUiVersion||minute!==voicePreparedMinute){voicePreparedItems=VoiceView.prepare(marketVoice.read().predictions,{classify:EdgeModel.classify});voicePreparedVersion=voiceUiVersion;voicePreparedMinute=minute;}
+ return voicePreparedItems;
+}
+function voiceScope(code=''){return voiceRecords().filter(p=>!code||p.code===code);}
+function voiceDate(value){const t=Date.parse(value||'');return Number.isFinite(t)?new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(t):'公表日不明';}
+function voiceSignature(items){let hash=0;for(const p of items){const str=p.key+p.stamp+p.stance+p.eligible;for(let i=0;i<str.length;i++)hash=(hash*31+str.charCodeAt(i))|0;}return String(items.length)+':'+hash;}
+function voiceCompany(code){return EdgeModel.aliases[code]||__modules.nikkei225.rows().find(r=>r.code===code)?.name||code;}
+function voiceSearchLink(code=''){return 'https://news.google.com/search?q='+encodeURIComponent((code?code+' '+voiceCompany(code)+' ':'日本株 ')+'アナリスト 目標株価')+'&hl=ja&gl=JP&ceid=JP:ja';}
+function voicePageLink(code=''){return '#/voice'+(code?'/'+encodeURIComponent(code):'');}
+function voiceChannelName(channel){return ({analyst:'アナリスト関連記事',community:'個人投資家・ブログ',video:'動画・解説',official:'企業発信関連記事',media:'ニュース'})[channel]||'ニュース';}
+function voiceJobStatus(code,items){const db=marketVoice.read();return VoiceView.status({items,scan:db.collector?.scans?.[code],running:window.__stockEdgeBg.intelRunning&&window.__stockEdgeBg.intelCodes?.includes(code),requested:voicePriorityCodes.has(code)});}
+function voiceStatusLine(code,items){
+ const db=marketVoice.read(),scan=db.collector?.scans?.[code],status=voiceJobStatus(code,items);
+ return `<div class="voice-status-line ${status.kind}" role="status" data-voice-job="${esc(code)}">${esc(status.label)}${scan?.at?' · 最終検索 '+esc(voiceDate(new Date(scan.at).toISOString())):''}${scan?.failures&&scan.retryAt?' · 再試行目安 '+esc(voiceDate(new Date(scan.retryAt).toISOString())):''}</div>`;
+}
+function voiceSummary(items){
+ const s=VoiceView.stats(items);
+ return `<div class="voice-opinion-counts" aria-label="直近30日の採点対象の意見"><div class="bull"><span>強気の見出し</span><strong>${s.bull}<small>件</small></strong></div><div class="bear"><span>弱気の見出し</span><strong>${s.bear}<small>件</small></strong></div><div><span>混在・中立</span><strong>${s.neutral}<small>件</small></strong></div></div><p class="voice-evidence-note">意見 ${s.eligible}件 / ${s.sources}媒体 · ニュース・材料 ${s.materials}件${s.archived?' · 古い記事 '+s.archived+'件':''}。見出しの自動整理です。著者の本人確認や記事本文の読解を済ませた評価ではありません。</p>`;
+}
+function voiceStory(p,{compact=false}={}){
+ const valid=p.eligible&&p.category==='voice',stance=p.stance==='neutral'?'混在・中立':voiceStanceLabel(p.stance),label=p.category==='material'?'ニュース・材料':valid?'意見 · '+stance:'意見 · 採点対象外';
+ return `<article class="voice-story-card ${p.stance}" data-voice-story="${esc(p.key)}"><div class="voice-story-label"><span class="voice-story-stance ${p.stance}">${esc(label)}</span><span>${esc(voiceChannelName(p.opinionChannel))}</span></div><div class="voice-story-company"><button type="button" data-n225-detail="${esc(p.code)}">${esc(voiceCompany(p.code))} <small>${esc(p.code)}</small></button><time datetime="${esc(p.publishedAt||'')}">${esc(voiceDate(p.publishedAt))}</time></div><h3>${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.headline)}</a>`:esc(p.headline)}</h3><p class="voice-story-source">情報源：<strong>${esc(p.publisher)}</strong>${!compact&&p.author&&p.author!==p.publisher?' · 著者表記（未確認）：'+esc(p.author):''}</p>${p.targetPrice>0&&Number.isFinite(p.targetPrice)?`<p class="voice-story-target">記事内の目標株価 <strong>¥${money(p.targetPrice)}</strong> <small>見出しからの抽出・原文で確認</small></p>`:''}${!compact?`<p class="voice-story-reasons">見出しから抽出：${esc(p.reasons.join(' / ')||'評価語を特定できませんでした')}</p>${p.summary&&p.summary!==p.headline?`<details class="voice-story-excerpt" data-voice-expanded="${esc(p.key)}"><summary>配信された概要を見る</summary><p>${esc(p.summary)}</p></details>`:''}<p class="voice-story-quality">${esc(p.quality)}${p.category==='voice'?' · '+esc(stance)+'は売買推奨ではありません':''}</p>`:''}<div class="voice-story-actions">${p.url?`<a class="btn small" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">元記事を読む ↗</a>`:'<span class="voice-story-quality">元記事のURLがありません</span>'}${compact?`<a class="btn small" href="${voicePageLink(p.code)}">この銘柄の意見一覧</a>`:''}</div></article>`;
+}
+function voiceEmpty(code,items,{filtered=false}={}){
+ const status=code?voiceJobStatus(code,items):null,s=VoiceView.stats(items);
+ const title=filtered?'絞り込み条件に合う記事がありません':status?.label||'市場情報はまだ保存されていません';
+ const copy=filtered?'条件をリセットするか、「すべての期間」で古い記事も確認できます。':status?.kind==='failed'?'通信や配信元の制限で取得できませんでした。保存記事は消していません。「この銘柄を優先取得」で再試行できます。':status?.kind==='empty'?'検索は完了しましたが、銘柄と一致する公開記事を採用できませんでした。記事が存在しないという意味ではありません。':s.archived?'新しい記事がありません。古い記事は一覧の「すべての期間」で確認できます。':'取得後は、ここに見出し・媒体・公表日・元記事へのリンクを表示します。';
+ return `<div class="voice-empty-state"><strong>${esc(title)}</strong><p>${esc(copy)}</p><div class="voice-panel-actions">${filtered?'<button class="btn" type="button" data-voice-reset>条件をリセット</button>':code?`<button class="btn primary" type="button" data-voice-refresh-code="${esc(code)}">この銘柄を優先取得</button>`:'<button class="btn primary" type="button" data-market-intel-refresh>市場情報を取得</button>'}<a class="btn" href="${voiceSearchLink(code)}" target="_blank" rel="noopener noreferrer">公開記事を検索 ↗</a></div></div>`;
+}
+function marketVoiceAxis(code,mv){const n=mv.voice?.count||0;return `<a class="fast-axis voice-axis-link" href="${voicePageLink(code)}" aria-label="${esc(code)}のMarket Voiceの記事を読む"><span>MARKET VOICE</span><strong>${n&&Number.isFinite(mv.voice.score)?mv.voice.score:'—'}</strong><small>${n?'採点対象 '+n+'件':'採点対象の意見なし'}</small><b>記事・意見を読む →</b></a>`;}
+function marketVoiceStockPanel(stock){
+ const code=VoiceView.codeOf(stock.ticker);if(!code)return '<section class="panel voice-stock-panel"><div class="panel-body"><h2>市場の声（Market Voice）</h2><p>ランキングから実際の銘柄を選ぶと、その銘柄の記事を確認できます。</p><a class="btn" href="#/voice">全銘柄の市場情報を見る</a></div></section>';
+ const items=voiceScope(code),current=items.filter(p=>p.fresh),m=marketVoice.metrics(code);
+ return `<section class="panel voice-stock-panel" id="market-voice-stock" data-voice-stock-panel="${esc(code)}" data-voice-signature="${voiceSignature(items)}"><div class="panel-header"><div><span class="eyebrow">${esc(code)} · MARKET VOICE</span><h2>この銘柄の市場の声</h2><p>点数の元になった記事を、ここで確認できます。</p></div><a class="btn" href="${voicePageLink(code)}">すべての記事を見る →</a></div><div class="panel-body">${voiceStatusLine(code,items)}${voiceSummary(items)}<div class="voice-panel-actions"><button class="btn primary" type="button" data-voice-refresh-code="${esc(code)}">この銘柄を優先取得</button></div><div class="voice-new-message" data-voice-new hidden><button class="btn" type="button" data-voice-apply>新しい情報を表示</button></div><div class="voice-stock-stories">${current.length?current.slice(0,3).map(p=>voiceStory(p,{compact:true})).join(''):voiceEmpty(code,items)}</div>${items.length>3?`<a class="btn voice-more-link" href="${voicePageLink(code)}">${esc(voiceCompany(code))}の全${items.length}件を読む →</a>`:''}<details class="voice-method"><summary>Voiceスコア ${m.voice.count?m.voice.score:'—'} の根拠と読み方</summary><p>30日以内の意見を対象に、媒体の偏り・鮮度・少数記事による偏りを補正しています。ニュース材料は意見と分けます。50は中立の基準で、意見がない場合は「—」です。勝率や利益の確率ではありません。</p></details></div></section>`;
+}
+function voiceHomeOverview(){
+ const all=voiceRecords(),fresh=all.filter(p=>p.fresh),s=VoiceView.stats(all);
+ return `<section class="voice-home-overview" aria-label="市場の声の入口"><div class="voice-home-heading"><div><span class="eyebrow">MARKET VOICE</span><h2>市場の声を読む</h2><p>意見 ${s.eligible}件 · ニュース ${s.materials}件</p></div><a class="btn primary" href="#/voice">記事・意見一覧へ →</a></div>${fresh.length?fresh.slice(0,2).map(p=>`<a class="voice-home-headline" href="${voicePageLink(p.code)}"><span>${esc(voiceCompany(p.code))} · ${esc(p.publisher)} · ${esc(voiceDate(p.publishedAt))}</span><strong>${esc(p.headline)}</strong><small>この銘柄の記事を見る →</small></a>`).join(''):'<p>取得済みの記事はここに表示します。記事一覧では、取得状況と銘柄ごとの再取得ができます。</p>'}</section>`;
+}
+function voiceFilterButtons(){return `<div class="voice-filter-row" role="group" aria-label="情報の種類">${[['all','すべて'],['analyst','専門家関連記事'],['opinion','意見'],['community','個人・動画'],['material','ニュース・材料']].map(([v,label])=>`<button class="btn small" type="button" data-voice-kind="${v}" aria-pressed="${voiceFilters.kind===v}">${label}</button>`).join('')}</div><div class="voice-filter-row" role="group" aria-label="見出しの方向">${[['all','方向すべて'],['bullish','強気'],['bearish','弱気'],['neutral','混在・中立']].map(([v,label])=>`<button class="btn small" type="button" data-voice-stance="${v}" aria-pressed="${voiceFilters.stance===v}">${label}</button>`).join('')}</div><div class="voice-filter-row" role="group" aria-label="記事の期間">${[['fresh','30日以内'],['all','すべての期間']].map(([v,label])=>`<button class="btn small" type="button" data-voice-period="${v}" aria-pressed="${voiceFilters.period===v}">${label}</button>`).join('')}</div>`;}
+function voiceResultsHtml(){const items=voiceScope(state.voiceCode||''),selected=VoiceView.select(items,{...voiceFilters,code:state.voiceCode||''});return {count:selected.length,html:selected.length?selected.slice(0,voiceFilters.limit).map(p=>voiceStory(p)).join('')+(selected.length>voiceFilters.limit?`<button class="btn voice-more-link" type="button" data-voice-more>さらに24件を表示（残り${selected.length-voiceFilters.limit}件）</button>`:''):voiceEmpty(state.voiceCode||'',items,{filtered:!!items.length})};}
+function marketVoicePage(){
+ const code=state.voiceCode||'',items=voiceScope(code),db=marketVoice.read(),collector=db.collector||{},result=voiceResultsHtml(),running=window.__stockEdgeBg.intelRunning;
+ return `<div class="v4-dashboard voice-reading-page"><header class="voice-reading-header"><span class="eyebrow">MARKET VOICE</span><h1>${code?esc(voiceCompany(code))+'の市場の声':'市場の声・記事を読む'}</h1><p>意見の方向、見出し、媒体、公表日をまとめて確認できます。</p><div class="voice-panel-actions">${code?`<button class="btn primary" type="button" data-voice-refresh-code="${esc(code)}">この銘柄を優先取得</button><a class="btn" href="#/voice">全銘柄に戻る</a>`:'<button class="btn primary" type="button" data-market-intel-refresh>市場情報を取得</button>'}<a class="btn" href="${voiceSearchLink(code)}" target="_blank" rel="noopener noreferrer">公開記事を検索 ↗</a></div></header><div data-voice-page-summary>${voiceSummary(items)}</div><div class="voice-page-status" role="status">${code?voiceStatusLine(code,items):`<span data-voice-collector-status>保存記事 ${items.length}件 · 最終検索 ${collector.lastAttemptAt?esc(voiceDate(collector.lastAttemptAt)):'未実行'}</span>`}<span data-mv-progress-text>${running?`${window.__stockEdgeBg.intelDone||0}/${window.__stockEdgeBg.intelTotal||0}検索中`:'保存済み情報を表示'}</span></div><section class="voice-reader"><h2>記事一覧${code?' · '+esc(code):''}</h2><label class="voice-search-label">銘柄名・コード・媒体で絞り込む<input id="voice-filter" type="search" value="${esc(voiceFilters.query)}" placeholder="例：7203、トヨタ、目標株価" autocomplete="off"></label><div data-voice-filter-buttons>${voiceFilterButtons()}</div><div class="voice-result-info"><strong data-voice-result-count aria-live="polite">${result.count}件</strong><button class="btn small" type="button" data-voice-reset>条件をリセット</button></div><div class="voice-new-message" data-voice-new hidden><button class="btn" type="button" data-voice-apply>新しい情報を表示</button></div><div id="voice-results" data-voice-signature="${voiceSignature(items)}">${result.html}</div></section><details class="voice-diagnostics"><summary>取得状況・失敗理由を見る</summary><p>最終取得経路：${esc(collector.lastRoute||'未取得')}。前回は${collector.lastScanned||0}銘柄を確認しました。</p><p>${esc((collector.lensErrors||[]).slice(0,12).join(' / ')||'前回の取得エラー記録なし')}</p><p>公開RSSの見出しと配信概要を使います。有料記事・ログイン必須SNSの本文は取得しません。記事が検索に載らない場合や通信制限がある場合は取得できません。</p></details></div>`;
+}
+function renderVoiceResults(){const box=document.getElementById('voice-results');if(!box)return;const result=voiceResultsHtml();box.innerHTML=result.html;box.dataset.voiceSignature=voiceSignature(voiceScope(state.voiceCode||''));const count=document.querySelector('[data-voice-result-count]');if(count)count.textContent=result.count+'件';document.querySelector('[data-voice-filter-buttons]').innerHTML=voiceFilterButtons();}
+function refreshVisibleMarketVoice(force=false){
+ if(state.loading)return;
+ const axis=document.querySelector('.voice-axis-link');if(axis&&state.route==='stock'){const code=VoiceView.codeOf(state.ticker);axis.outerHTML=marketVoiceAxis(code,marketVoice.metrics(code));}
+ document.querySelectorAll('[data-voice-job]').forEach(node=>{const code=node.dataset.voiceJob;node.outerHTML=voiceStatusLine(code,voiceScope(code));});
+ if(state.route==='stock'){
+  const panel=document.querySelector('[data-voice-stock-panel]');if(!panel)return;const code=panel.dataset.voiceStockPanel,items=voiceScope(code),signature=voiceSignature(items);
+  const status=panel.querySelector('[data-voice-job]');if(status)status.outerHTML=voiceStatusLine(code,items);
+  if(panel.dataset.voiceSignature===signature)return;
+  const reading=(panel.querySelector('.voice-story-card')||panel.querySelector('details[open]'))&&panel.getBoundingClientRect().top<innerHeight&&panel.getBoundingClientRect().bottom>0;
+  if(reading&&!force){const pending=panel.querySelector('[data-voice-new]');pending.hidden=false;pending.querySelector('button').textContent=items.filter(p=>p.fresh).length+'件の最新記事を表示';return;}
+  panel.outerHTML=marketVoiceStockPanel(fastDetailStock());
+ }else if(state.route==='voice'){
+  const items=voiceScope(state.voiceCode||''),box=document.getElementById('voice-results');if(!box)return;
+  const collectorStatus=document.querySelector('[data-voice-collector-status]');if(collectorStatus){const collector=marketVoice.read().collector||{};collectorStatus.textContent='保存記事 '+items.length+'件 · 最終検索 '+(collector.lastAttemptAt?voiceDate(collector.lastAttemptAt):'未実行');}
+  const summary=document.querySelector('[data-voice-page-summary]');if(summary)summary.innerHTML=voiceSummary(items);
+  if(box.dataset.voiceSignature===voiceSignature(items))return;
+  if(!force&&(document.activeElement?.id==='voice-filter'||box.querySelector('.voice-story-card')&&box.getBoundingClientRect().top<innerHeight)){document.querySelector('[data-voice-new]').hidden=false;return;}
+  renderVoiceResults();document.querySelector('[data-voice-new]').hidden=true;
+ }
+}
+async function requestStockVoice(code){
+ if(!__modules.nikkei225.UNIVERSE.some(r=>r.code===code)){toast('ランキングから実際の銘柄を選んでください。');return;}
+ voicePriorityCodes.add(code);
+ refreshVisibleMarketVoice();
+ if(window.__stockEdgeBg.intelRunning){toast('収集中の処理が終わり次第、この銘柄を優先取得します。');refreshVisibleMarketVoice();scheduleVoice(500);return;}
+ await collectBrowserMarketIntel(true,[code]);refreshVisibleMarketVoice(true);scheduleVoice(500);
+}
+app.addEventListener('click',async event=>{
+ const b=event.target.closest('button');if(!b)return;
+ if(b.hasAttribute('data-voice-refresh-code')){const code=b.dataset.voiceRefreshCode;b.disabled=true;try{await requestStockVoice(code);}catch(e){toast('取得できませんでした。取得状況をご確認ください。');}finally{b.disabled=false;}return;}
+ if(b.hasAttribute('data-voice-apply')){refreshVisibleMarketVoice(true);return;}
+ let filtered=false;
+ if(b.hasAttribute('data-voice-kind')){voiceFilters.kind=b.dataset.voiceKind;filtered=true;}
+ if(b.hasAttribute('data-voice-stance')){voiceFilters.stance=b.dataset.voiceStance;filtered=true;}
+ if(b.hasAttribute('data-voice-period')){voiceFilters.period=b.dataset.voicePeriod;filtered=true;}
+ if(b.hasAttribute('data-voice-reset')){resetVoiceFilters();const input=document.getElementById('voice-filter');if(input)input.value='';filtered=true;}
+ if(b.hasAttribute('data-voice-more')){voiceFilters.limit+=24;renderVoiceResults();return;}
+ if(filtered){voiceFilters.limit=24;renderVoiceResults();}
+});
+app.addEventListener('input',event=>{if(event.target.id!=='voice-filter')return;voiceFilters.query=event.target.value;state.voiceFilter=event.target.value;voiceFilters.limit=24;renderVoiceResults();});

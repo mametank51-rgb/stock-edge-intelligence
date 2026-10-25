@@ -15,3 +15,11 @@ STOCK_EDGE_INTELLIGENCE_EVOLVED.html
 .env.*
 !.env.example
 *.log
+upgrade-evidence.py
+evidence-touch-smoke.cjs
+evidence-touch-preview.png
+upgrade-voice.py
+sync-voice.py
+voice-reader-smoke.cjs
+voice-reader-preview.png
+voice-public.png

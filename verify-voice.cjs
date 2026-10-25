@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),M=require('./edge-model.js'),V=require('./voice-view.js');
+const now=Date.parse('2026-10-25T03:00:00Z');
+const base={code:'7269',company:'スズキ',headline:'強気を据置き、目標株価2,600円に引下げ',publishedAt:'2026-10-23',publisher:'媒体A',sourceCategory:'voice',opinionChannel:'analyst',browserAuto:true,extractionVersion:2,stance:'bullish',url:'https://example.com/article'};
+const list=V.prepare([base,{...base}, {...base,code:'7203',headline:'下方修正',publisher:'媒体B'}, {...base,headline:'ニュース',sourceCategory:'material'}, {...base,headline:'旧記事',publishedAt:'2025-01-01'}, {...base,headline:'日付不明',publishedAt:''}],{now,classify:M.classify});
+assert.equal(list.length,5);assert.equal(list.find(p=>p.code==='7269'&&p.category==='voice'&&p.fresh).stance,'neutral');
+assert.equal(M.classify('目標株価を引下げ'),'bearish');assert.equal(M.classify('レーティングを格上げ'),'bullish');
+assert.equal(V.select(list,{code:'7269'}).length,2);assert.equal(V.select(list,{code:'7269',kind:'analyst',stance:'neutral'}).length,2);
+assert.equal(V.select(list,{kind:'material'}).length,1);assert.equal(V.select(list,{query:'媒体B'}).length,1);
+assert.equal(V.select(list,{period:'all'}).length,5);assert.equal(V.stats(list).eligible,2);assert.equal(V.stats(list).archived,2);
+assert.equal(V.codeOf('65010'),'6501');assert.equal(V.codeOf('6500'),'6500');assert.equal(V.codeOf('DMY001'),'');
+assert.equal(V.safeUrl('javascript:alert(1)'),'');assert.equal(V.safeUrl('https://password:secret@example.com'),'');
+assert.equal(V.status({items:[],scan:{at:1}}).kind,'empty');assert.equal(V.status({items:[],scan:{failures:1}}).kind,'failed');assert.equal(V.status({items:[],requested:true}).kind,'working');
+assert.equal(V.prepare([{...base,publishedAt:'2027-01-01'}],{now}).at(0).fresh,false);
+const html=fs.readFileSync('index.html','utf8').replace(/\r\n/g,'\n');assert.ok(html.includes(fs.readFileSync('voice-view.js','utf8').replace(/\r\n/g,'\n')));
+console.log('PASS: Voice deduplication, mixed headlines, freshness, filtering, status, ticker codes, safe links, embedded view model.');
