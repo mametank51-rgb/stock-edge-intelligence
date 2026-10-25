@@ -25,4 +25,12 @@ class ResearchTests(unittest.TestCase):
   self.assertIn('PER12倍',next(c['excerpt'] for c in r['claims'] if c['kind']=='valuation'))
   self.assertFalse(any(c['kind']=='risk' for c in r['claims']))
   self.assertEqual(next(c for c in r['claims'] if c['kind']=='condition')['conditionType'],'assumption')
+ def test_negated_risks_and_truncation(self):
+  for sentence in ['指標的な割高感もありませんし、優待も魅力です','大きな減益はありません','リスクはない','懸念は見られない']:
+   r=evidence('企業研究',sentence)
+   self.assertFalse(any(c['kind']=='risk' or c['polarity']=='caution' for c in r['claims']),sentence)
+  r=evidence('企業研究','割高感はないが、需要減による減益懸念がある')
+  self.assertTrue(any(c['kind']=='risk' and c['polarity']=='caution' for c in r['claims']))
+  r=evidence('企業研究','PER12倍で割安と考える'+('長い理由'*50))
+  self.assertTrue(next(c for c in r['claims'] if c['kind']=='valuation')['excerpt'].endswith('…'))
 if __name__=='__main__':unittest.main()

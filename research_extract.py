@@ -10,7 +10,7 @@ import unicodedata
 import threading
 import time
 
-VERSION = 2
+VERSION = 3
 AGENT = 'StockEdgeResearch/1.0'
 VOID = {'br','hr','img','input','meta','link','wbr','source','area','base','embed','param','track','col'}
 class ArticleParser(HTMLParser):
@@ -59,6 +59,7 @@ RULES=[
 UP=re.compile(r'割安|増益|増収|上方修正|増配|自社株買い|最高益|好調')
 DOWN=re.compile(r'割高|減益|減収|下方修正|減配|赤字|悪化|リスク|懸念')
 NEGATE=re.compile(r'(?:割安|増益|増収|好調|成長)(?:で(?:は|も)|と(?:は|も))?ない|(?:減益|赤字|懸念|リスク)(?:で(?:は|も)|と(?:は|も)|は)?ない|割安とは言え|増益とは言え')
+NEGATED_TERM=re.compile(r'(?:割高(?:感)?|割安(?:感)?|減益|減収|増益|増収|赤字|リスク|懸念|悪化)(?:が|は|も|の|でも|では|とは|とも)?(?:あまり|ほとんど)?(?:ありません|ありえない|ない|なく|見当たらない|見られない|認められない)')
 def evidence(title, body, code='', company='', basis='rss'):
     text=norm(title)+'\n'+norm(body)
     sentences=[re.sub(r'\s+',' ',s).strip() for s in re.split(r'[。！？\n]+',text[:16000]) if s.strip()]
@@ -67,7 +68,7 @@ def evidence(title, body, code='', company='', basis='rss'):
         candidates=[s for s in sentences if re.search(pattern,s,re.I)]
         if kind=='valuation':candidates=[s for s in candidates if not re.search(r'PF時価総額|ポートフォリオ.*時価総額|運用資産総額',s)]
         if kind=='return':candidates=[s for s in candidates if not re.fullmatch(r'[0-9]+位\s+[0-9A-Z]{4}\s+.*',s)]
-        if kind=='risk':candidates=[s for s in candidates if re.search(pattern,re.sub(r'リスク[・\-]?リワード','',s),re.I) and not re.search(r'何か見逃している|最強で最上|投資にはリスク|自己責任|当ブログは|免責',s)]
+        if kind=='risk':candidates=[s for s in candidates if re.search(pattern,NEGATED_TERM.sub('',re.sub(r'リスク[・\-]?リワード','',s)),re.I) and not re.search(r'何か見逃している|最強で最上|投資にはリスク|自己責任|当ブログは|免責',s)]
         if not candidates:continue
         # Prefer concrete valuation/financial statements over rankings or generic
         # investor slogans. A metric alone still isn't a verified current fact.
@@ -79,11 +80,16 @@ def evidence(title, body, code='', company='', basis='rss'):
             return score
         sentence=max(candidates,key=relevance)
         match=re.search(pattern,sentence,re.I);start=max(0,match.start()-24)
-        excerpt=('…' if start else '')+sentence[start:start+min(68,remaining)]
+        budget=min(68,remaining)
+        if budget<8:break
+        prefix='…' if start else ''
+        end=min(len(sentence),start+budget-len(prefix)-1)
+        excerpt=prefix+sentence[start:end]+('…' if end<len(sentence) else '')
         if (kind,excerpt) in used:continue
         used.add((kind,excerpt));remaining-=len(excerpt)
         if remaining<0:break
-        up=bool(UP.search(sentence));down=bool(DOWN.search(sentence))
+        affirmed=NEGATED_TERM.sub('',sentence)
+        up=bool(UP.search(affirmed));down=bool(DOWN.search(affirmed))
         polarity='unclear' if NEGATE.search(sentence) or up==down else 'support' if up else 'caution'
         claim={'kind':kind,'label':label,'polarity':polarity,'excerpt':excerpt}
         if kind=='condition':claim['conditionType']='invalidation' if re.search(r'損切り|撤退|見送|下回|下方修正|悪化|未達',sentence) else 'assumption'
