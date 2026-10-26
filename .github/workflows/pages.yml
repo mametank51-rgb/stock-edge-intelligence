@@ -18,6 +18,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: chart-data
+          key: chart-v1-${{ github.run_id }}
+          restore-keys: chart-v1-
       - name: Verify model and JavaScript
         run: npm test
       - name: Prepare HTML

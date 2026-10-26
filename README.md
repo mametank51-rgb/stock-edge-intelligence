@@ -102,6 +102,8 @@ npm run build
 
 銘柄名は `stock-names.js` の日本語対応表を優先し、古い英語名キャッシュも表示時に変換します。固定保存した判断記録の内容・ハッシュは変えません。英語での検索にも対応します。ローソク足には配信元の分割調整済みOHLCVを使い、別途配信される配当調整済み終値を混ぜないようにしています。
 
+スマホのチャートは、まず公開サイトの `chart-data/<銘柄コード>.json` を読みます。`collect-charts.py` が225銘柄の日足を最大2接続で収集し、GitHub Pagesと同じ配信先へ配置します。取得時刻と株価基準日を確認してください。失敗時には前のデータを保持し、未配信時には従来の取得経路も使います。`npm run build` はチャートJSONも `public/chart-data/` へ配置します。端末の保存上限・保存容量不足では、保存データを保持したまま最大3件のチャートをページ内に一時表示します。
+
 参考：[GitHub Pagesサイトの作成](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)
 # 個人投資家のブログ
 

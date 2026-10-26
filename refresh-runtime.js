@@ -18,15 +18,16 @@ function createGate({fetch:fetcher,getPolicy,now=Date.now}){
    const host=new URL(job.url,'http://localhost').host;
    if((cooldowns.get(host)||0)>now()){job.reject(Error('取得先の再試行待ち'));continue;}
    active++;peak=Math.max(peak,active);const ctrl=new AbortController();inflight.add(ctrl);
+   const {edgePriority,edgeTimeoutMs,...fetchOptions}=job.options,timer=Number.isFinite(edgeTimeoutMs)&&edgeTimeoutMs>0?setTimeout(()=>ctrl.abort(),edgeTimeoutMs):null;
    const abort=()=>ctrl.abort();job.options.signal?.addEventListener('abort',abort,{once:true});
-   Promise.resolve().then(()=>fetcher(job.url,{...job.options,signal:ctrl.signal})).then(async response=>{
+   Promise.resolve().then(()=>fetcher(job.url,{...fetchOptions,signal:ctrl.signal})).then(async response=>{
     if(response.status===429||response.status===503){const h=response.headers.get('retry-after'),seconds=Number(h);const ms=h?(Number.isFinite(seconds)?seconds*1000:Date.parse(h)-now()):60000;cooldowns.set(host,now()+Math.max(15000,Math.min(600000,ms||60000)));}
     // Hold the slot until the body arrives, rather than releasing at response headers.
     const body=await response.arrayBuffer();return new Response([204,205,304].includes(response.status)?null:body,{status:response.status,statusText:response.statusText,headers:response.headers});
-   }).then(job.resolve,job.reject).finally(()=>{job.options.signal?.removeEventListener('abort',abort);inflight.delete(ctrl);active--;drain();});
+   }).then(job.resolve,job.reject).finally(()=>{if(timer)clearTimeout(timer);job.options.signal?.removeEventListener('abort',abort);inflight.delete(ctrl);active--;drain();});
   }
  }
- function request(url,options={}){return new Promise((resolve,reject)=>{queue.push({url,options,resolve,reject});drain();});}
+ function request(url,options={}){return new Promise((resolve,reject)=>{const job={url,options,resolve,reject},next=options.edgePriority?queue.findIndex(j=>!j.options.edgePriority):-1;if(next>=0)queue.splice(next,0,job);else queue.push(job);drain();});}
  function pause(){while(queue.length)queue.shift().reject(Object.assign(Error('更新を休止しました'),{name:'AbortError'}));for(const ctrl of inflight)ctrl.abort();}
  return {request,pause,resume:drain,stats:()=>({active,queued:queue.length,peak})};
 }

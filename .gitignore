@@ -65,3 +65,7 @@ nikkei-names-source.html
 chart-live-probe.cjs
 chart-japanese-preview.png
 display-browser-smoke.cjs
+
+chart-7453-probe.cjs
+chart-mobile-smoke.cjs
+chart-mobile-preview.png

@@ -21,6 +21,7 @@ const server=http.createServer(async(req,res)=>{
   try{const target=new URL(u.searchParams.get('url'));if(!valid(target))throw Error('Feed URL denied');const k=target.href,old=cache.get(k);let body;if(old&&Date.now()-old.at<300000)body=old.body;else{body=await feed(target);if(cache.size>200)cache.delete(cache.keys().next().value);cache.set(k,{at:Date.now(),body});}res.writeHead(200,{'Content-Type':'application/xml; charset=utf-8'});res.end(body);}catch(e){res.writeHead(502,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:e.message}));}return;
  }
  const files={'/':'index.html','/index.html':'index.html','/STOCK_EDGE_INTELLIGENCE_EVOLVED.html':'index.html','/community-data.json':'community-data.json'};
+ const chartPath=u.pathname.match(/^\/chart-data\/([1-9][0-9]{2}[0-9A-Z]|index)\.json$/);if(chartPath&&fs.existsSync(path.join(__dirname,'chart-data',chartPath[1]+'.json')))files[u.pathname]='chart-data/'+chartPath[1]+'.json';
  if(!files[u.pathname]){res.writeHead(404);res.end();return;}
  res.writeHead(200,{'Content-Type':u.pathname.endsWith('.json')?'application/json; charset=utf-8':'text/html; charset=utf-8'});fs.createReadStream(path.join(__dirname,files[u.pathname])).pipe(res);
 });
