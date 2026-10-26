@@ -56,7 +56,9 @@ def main():
  import argparse
  parser=argparse.ArgumentParser();parser.add_argument('--force',action='store_true');parser.add_argument('--codes',default='');args=parser.parse_args()
  universe=json.loads(re.search(r'const UNIVERSE=(\[.*?\]);',(ROOT/'index.html').read_text(encoding='utf-8')).group(1))
- allowed={r['code'] for r in universe};codes=args.codes.split(',') if args.codes else [r['code'] for r in universe]
+ seeds=json.loads((ROOT/'extra-chart-codes.json').read_text(encoding='utf-8')) if (ROOT/'extra-chart-codes.json').exists() else []
+ listed=json.loads((ROOT/'stock-catalog.json').read_text(encoding='utf-8'))['items'] if (ROOT/'stock-catalog.json').exists() else []
+ allowed={r['code'] for r in universe}|{r['code'] for r in listed}|set(seeds);codes=args.codes.split(',') if args.codes else list(dict.fromkeys([r['code'] for r in universe]+seeds))
  if not set(codes)<=allowed:raise ValueError('unknown stock code')
  DEST.mkdir(exist_ok=True);stats={}
  with ThreadPoolExecutor(max_workers=2) as pool:
@@ -68,6 +70,6 @@ def main():
    p=json.loads((DEST/(code+'.json')).read_text(encoding='utf-8'));items.append({'code':code,'asOf':p['asOf'],'fetchedAt':p['fetchedAt']})
   except (OSError,ValueError,KeyError):pass
  (DEST/'index.json').write_text(json.dumps({'schema':'stock-edge-chart-index-v1','generatedAt':datetime.now(timezone.utc).isoformat(),'items':items},ensure_ascii=False,separators=(',',':')),encoding='utf-8')
- print('Daily chart snapshots: '+str(len(items))+'/'+str(len(allowed))+' available; '+json.dumps(stats),flush=True)
+ print('Daily chart snapshots: '+str(len(items))+' available; '+str(len(codes))+' targets; '+json.dumps(stats),flush=True)
 
 if __name__=='__main__':main()

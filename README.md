@@ -104,6 +104,8 @@ npm run build
 
 スマホのチャートは、まず公開サイトの `chart-data/<銘柄コード>.json` を読みます。`collect-charts.py` が225銘柄の日足を最大2接続で収集し、GitHub Pagesと同じ配信先へ配置します。取得時刻と株価基準日を確認してください。失敗時には前のデータを保持し、未配信時には従来の取得経路も使います。`npm run build` はチャートJSONも `public/chart-data/` へ配置します。端末の保存上限・保存容量不足では、保存データを保持したまま最大3件のチャートをページ内に一時表示します。
 
+個別ページはチャートを先頭で自動表示します。「すべて更新」は対象件数・成功/取得不可件数を表示しながら、日経225と追加銘柄の日足・財務・ニュースを全件処理します。東証コード・社名による追加銘柄と、過去の類似局面に基づく複数のシナリオ線・参考確率にも対応しています。方法と利用条件は[新機能の使い方](FEATURES_GUIDE.md)を参照してください。
+
 参考：[GitHub Pagesサイトの作成](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)
 # 個人投資家のブログ
 

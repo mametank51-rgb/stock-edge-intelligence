@@ -79,7 +79,7 @@ function refreshVisibleMarketVoice(force=false){
  }
 }
 async function requestStockVoice(code){
- if(!__modules.nikkei225.UNIVERSE.some(r=>r.code===code)){toast('ランキングから実際の銘柄を選んでください。');return;}
+ if(!__modules.nikkei225.rows().some(r=>r.code===code)){toast('ランキングから実際の銘柄を選んでください。');return;}
  voicePriorityCodes.add(code);
  refreshVisibleMarketVoice();
  if(window.__stockEdgeBg.intelRunning){toast('収集中の処理が終わり次第、この銘柄を優先取得します。');refreshVisibleMarketVoice();scheduleVoice(500);return;}
