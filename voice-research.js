@@ -8,6 +8,7 @@ const codeOf=v=>/^[1-9][0-9]{3}$|^[1-9][0-9]{2}[A-Z]$/.test(String(v||''))?Strin
 const number=v=>typeof v==='number'&&Number.isFinite(v);
 const record=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
 const age=(v,now)=>{const t=Date.parse(v||'');return Number.isFinite(t)&&t<=now+300000?(now-t)/86400000:Infinity;};
+function quoteSessionAge(value,now){if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return age(value,now);const time=Date.parse(value+'T00:00:00Z'),today=new Date(now+9*3600000).toISOString().slice(0,10);if(!Number.isFinite(time)||new Date(time).toISOString().slice(0,10)!==value||value>today)return Infinity;return (Date.parse(today+'T00:00:00Z')-time)/86400000;}
 function canonical(value){try{const u=new URL(value);if(!['https:','http:'].includes(u.protocol)||u.username||u.password)return '';u.hash='';for(const k of [...u.searchParams.keys()])if(/^utm_|^(fbclid|gclid)$/.test(k))u.searchParams.delete(k);return u.href;}catch{return '';}}
 const validKinds=new Set(['valuation','growth','return','catalyst','risk','condition']);
 function claimsOf(article){return ([1,2,3,4,5,6].includes(article?.research?.version)&&Array.isArray(article.research.claims)?article.research.claims:[]).filter(c=>c&&typeof c==='object'&&validKinds.has(c.kind)&&clean(c.excerpt)).slice(0,6).map(c=>({...c,metrics:article.research.version>=6&&Array.isArray(c.metrics)?c.metrics.filter(m=>m&&typeof m==='object'&&number(m.value)).slice(0,6):[],label:clean(c.label).slice(0,30),excerpt:clean(c.excerpt).slice(0,90),polarity:['support','caution'].includes(c.polarity)?c.polarity:'unclear',url:canonical(article.url),publisher:clean(article.publisher),owner:clean(article.sourceGroup||article.publisher),date:article.publishedAt,basis:article.research.basis==='article'?'公開本文の一部':'RSSの範囲'}));}
@@ -22,7 +23,7 @@ function identity(article){
 function compare(idea,quote={},fund={},now=Date.now()){
  quote=record(quote);fund=record(fund);
  const checks=[],tasks=[],has=k=>idea.claims.some(c=>c.kind===k);
- const quoteAge=age(quote.dataAsOf,now),quoteFresh=number(quote.price)&&quote.price>0&&quoteAge>=0&&quoteAge<=7;
+ const quoteAge=quoteSessionAge(quote.dataAsOf,now),quoteFresh=number(quote.price)&&quote.price>0&&quoteAge>=0&&quoteAge<=7;
  let overheat=false;
  if(quoteFresh){
   overheat=number(quote.rsi)&&quote.rsi>=70||number(quote.m20)&&quote.m20>=15;
