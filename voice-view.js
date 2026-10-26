@@ -1,6 +1,7 @@
 /* Pure presentation model for publicly sourced news and opinion records. */
 (function(root){
 'use strict';
+const Names=typeof module!=='undefined'&&module.exports?require('./stock-names.js'):root.StockNames;
 const text=v=>String(v??'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
 function codeOf(value){const s=String(value||'').toUpperCase().replace(/\.T$/,'');return /^[0-9A-Z]{4}$/.test(s)?s:/^[0-9A-Z]{4}0$/.test(s)?s.slice(0,4):'';}
 function safeUrl(value){try{const u=new URL(value);return ['https:','http:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{return '';}}
@@ -26,14 +27,14 @@ function prepare(items,{now=Date.now(),classify}={}){
   const legacy=!!raw.browserAuto&&raw.extractionVersion!==2;
   const category=raw.sourceCategory==='voice'?'voice':'material';
   const stance=raw.browserAuto&&classify?classify(headline):['bullish','bearish'].includes(raw.stance)?raw.stance:'neutral';
-  const record={...raw,code,headline,company:text(raw.company||code),publisher:text(raw.publisher||raw.author||'媒体不明'),author:text(raw.browserAuto?raw.feedAuthor:raw.author),targetPrice:raw.communityFeed?null:raw.browserAuto?extractTargetPrice(headline+' '+text(raw.summary)):raw.targetPrice,summary:text(raw.summary).slice(0,700),reasons:(Array.isArray(raw.reasons)?raw.reasons:[]).map(text).filter(Boolean).slice(0,5),url:safeUrl(raw.url),stamp:dated?stamp:0,fresh,eligible:fresh&&!legacy&&!!code,category,stance,quality:legacy?'旧収集形式':Number.isFinite(stamp)&&stamp>now?'公表時刻が未来':!dated?'公表日不明':!fresh?'30日超':raw.communityFeed&&!code?'ブログ閲覧用・個別銘柄の採点対象外':'見出し判定',key:raw.communityFeed?'blog|'+safeUrl(raw.url):code+'|'+headline.normalize('NFKC').toLowerCase().replace(/[\s「」『』【】]/g,'')};
+  const record={...raw,code,headline,company:Names.display(code,text(raw.company||code)),englishName:Names.english(code),publisher:text(raw.publisher||raw.author||'媒体不明'),author:text(raw.browserAuto?raw.feedAuthor:raw.author),targetPrice:raw.communityFeed?null:raw.browserAuto?extractTargetPrice(headline+' '+text(raw.summary)):raw.targetPrice,summary:text(raw.summary).slice(0,700),reasons:(Array.isArray(raw.reasons)?raw.reasons:[]).map(text).filter(Boolean).slice(0,5),url:safeUrl(raw.url),stamp:dated?stamp:0,fresh,eligible:fresh&&!legacy&&!!code,category,stance,quality:legacy?'旧収集形式':Number.isFinite(stamp)&&stamp>now?'公表時刻が未来':!dated?'公表日不明':!fresh?'30日超':raw.communityFeed&&!code?'ブログ閲覧用・個別銘柄の採点対象外':'見出し判定',key:raw.communityFeed?'blog|'+safeUrl(raw.url):code+'|'+headline.normalize('NFKC').toLowerCase().replace(/[\s「」『』【】]/g,'')};
   const old=map.get(record.key);if(!old||record.stamp>old.stamp)map.set(record.key,record);
  }
  return [...map.values()].sort((a,b)=>Number(b.category==='voice')-Number(a.category==='voice')||b.stamp-a.stamp);
 }
 function select(items,{code='',query='',kind='all',stance='all',period='fresh',source='',topic='all'}={}){
  const q=text(query).normalize('NFKC').toLowerCase();
- const result=items.filter(p=>(!code||p.code===code)&&(!source||p.sourceId===source)&&(topic==='all'||p.topic===topic)&&(period==='all'||p.fresh)&&(kind==='all'||kind==='blog'&&p.communityFeed||kind==='opinion'&&p.category==='voice'||kind==='analyst'&&p.opinionChannel==='analyst'||kind==='material'&&p.category==='material'||kind==='community'&&['community','video'].includes(p.opinionChannel))&&(stance==='all'||p.stance===stance)&&(!q||[p.code,p.company,p.publisher,p.author,p.headline,...p.reasons].join(' ').normalize('NFKC').toLowerCase().includes(q)));
+ const result=items.filter(p=>(!code||p.code===code)&&(!source||p.sourceId===source)&&(topic==='all'||p.topic===topic)&&(period==='all'||p.fresh)&&(kind==='all'||kind==='blog'&&p.communityFeed||kind==='opinion'&&p.category==='voice'||kind==='analyst'&&p.opinionChannel==='analyst'||kind==='material'&&p.category==='material'||kind==='community'&&['community','video'].includes(p.opinionChannel))&&(stance==='all'||p.stance===stance)&&(!q||[p.code,p.company,p.englishName,p.publisher,p.author,p.headline,...p.reasons].join(' ').normalize('NFKC').toLowerCase().includes(q)));
  if(kind!=='blog')return result;
  // Round-robin writers, newest post within each writer. One prolific feed must
  // not consume the entire first screen. Same writer on note/blog is one group.

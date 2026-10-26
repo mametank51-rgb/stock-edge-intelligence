@@ -12,7 +12,7 @@ function voiceRecords(){
 function voiceScope(code=''){return voiceRecords().filter(p=>!code||p.code===code);}
 function voiceDate(value){const t=Date.parse(value||'');return Number.isFinite(t)?new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(t):'公表日不明';}
 function voiceSignature(items){let hash=0;for(const p of items){const str=p.key+p.stamp+p.stance+p.eligible;for(let i=0;i<str.length;i++)hash=(hash*31+str.charCodeAt(i))|0;}return String(items.length)+':'+hash;}
-function voiceCompany(code){return EdgeModel.aliases[code]||__modules.nikkei225.rows().find(r=>r.code===code)?.name||code;}
+function voiceCompany(code){return StockNames.display(code,EdgeModel.aliases[code]||__modules.nikkei225.rows().find(r=>r.code===code)?.name||code);}
 function voiceSearchLink(code=''){return 'https://news.google.com/search?q='+encodeURIComponent((code?code+' '+voiceCompany(code)+' ':'日本株 ')+'アナリスト 目標株価')+'&hl=ja&gl=JP&ceid=JP:ja';}
 function voicePageLink(code=''){return '#/voice'+(code?'/'+encodeURIComponent(code):'');}
 function voiceChannelName(channel){return ({analyst:'アナリスト関連記事',community:'個人投資家・ブログ',video:'動画・解説',official:'企業発信関連記事',media:'ニュース'})[channel]||'ニュース';}

@@ -2,6 +2,7 @@
 (function(root){
 'use strict';
 const Integrity=typeof module!=='undefined'&&module.exports?require('./market-integrity.js'):root.MarketIntegrity;
+const Names=typeof module!=='undefined'&&module.exports?require('./stock-names.js'):root.StockNames;
 const clean=v=>String(v??'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
 const codeOf=v=>/^[1-9][0-9]{3}$|^[1-9][0-9]{2}[A-Z]$/.test(String(v||''))?String(v):'';
 const number=v=>typeof v==='number'&&Number.isFinite(v);
@@ -62,6 +63,7 @@ function build(items,{quotes={},fundamentals={},journal={},now=Date.now()}={}){
  const result=[];
  for(const idea of groups.values()){
   if(!idea.blogCount&&!journal[idea.code])continue;
+  idea.name=Names.display(idea.code,idea.name);
   idea.articles.sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt));
   idea.writers=new Set(idea.articles.filter(p=>p.communityFeed).map(p=>p.sourceGroup||p.publisher)).size;
   const topics=new Map();for(const c of idea.claims){const t=topics.get(c.kind)||{support:new Set(),caution:new Set()};if(c.polarity==='support'||c.polarity==='caution')t[c.polarity].add(c.owner);topics.set(c.kind,t);}
@@ -82,6 +84,6 @@ function build(items,{quotes={},fundamentals={},journal={},now=Date.now()}={}){
  }
  return result.sort((a,b)=>b.queueOrder-a.queueOrder||Date.parse(b.latest||0)-Date.parse(a.latest||0)||a.code.localeCompare(b.code));
 }
-function select(items,{filter='all',query='',limit=6}={}){const q=clean(query).normalize('NFKC').toLowerCase();return items.filter(i=>(!q||(i.code+' '+i.name+' '+i.claims.map(c=>c.excerpt).join(' ')).normalize('NFKC').toLowerCase().includes(q))&&(filter==='all'||filter==='new'&&i.recent>0||filter==='divergence'&&i.disagreements.length>0||filter==='overheat'&&i.overheat||filter==='saved'&&i.note||filter==='review'&&(i.due||i.priceReached||i.newAfterSave))).slice(0,limit);}
+function select(items,{filter='all',query='',limit=6}={}){const q=clean(query).normalize('NFKC').toLowerCase();return items.filter(i=>(!q||(i.code+' '+i.name+' '+Names.english(i.code)+' '+i.claims.map(c=>c.excerpt).join(' ')).normalize('NFKC').toLowerCase().includes(q))&&(filter==='all'||filter==='new'&&i.recent>0||filter==='divergence'&&i.disagreements.length>0||filter==='overheat'&&i.overheat||filter==='saved'&&i.note||filter==='review'&&(i.due||i.priceReached||i.newAfterSave))).slice(0,limit);}
 const api={build,compare,select,identity,claimsOf,canonical,codeOf};if(typeof module!=='undefined')module.exports=api;else root.VoiceResearch=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
