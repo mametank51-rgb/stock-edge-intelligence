@@ -19,5 +19,11 @@ class ChartTests(unittest.TestCase):
  def test_invalid_rows_are_recorded(self):
   body=self.body();body['chart']['result'][0]['indicators']['quote'][0]['open'][0]=None
   out=snapshot(body,'7453','https://example.com');self.assertEqual(len(out['rows']),29);self.assertEqual(out['rejectedRows'],1)
+ def test_long_history_is_not_truncated_to_two_years(self):
+  body=self.body();item=body['chart']['result'][0];values=[100+i for i in range(2000)]
+  item['timestamp']=[1577836800+i*86400 for i in range(2000)]
+  item['indicators']={'quote':[{'open':values,'high':[v+2 for v in values],'low':[v-2 for v in values],'close':values,'volume':[1000]*len(values)}]}
+  self.assertEqual(len(snapshot(body,'7453','https://example.com')['rows']),520)
+  self.assertEqual(len(snapshot(body,'7453','https://example.com',max_rows=2600)['rows']),2000)
 
 if __name__=='__main__':unittest.main()

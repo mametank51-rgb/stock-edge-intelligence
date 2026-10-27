@@ -6,6 +6,10 @@ assert.equal(parsed.meta.symbol,'7453.T');assert.ok(parsed.rows.length>=20);asse
 for(const code of Object.keys(Names.catalog))assert.ok(S.parse(JSON.parse(fs.readFileSync('chart-data/'+code+'.json','utf8')),{code}).rows.length>=20);
 assert.throws(()=>S.parse(snapshot,{code:'7203'}));assert.throws(()=>S.parse({...snapshot,meta:{symbol:'7453.T',currency:'USD'}},{code:'7453'}));assert.throws(()=>S.parse({...snapshot,asOf:'2000-01-01'},{code:'7453'}));assert.throws(()=>S.parse({...snapshot,sourceUrl:'https://example.com/7453.T'},{code:'7453'}));
 assert.equal(S.url('7453',{protocol:'https:',href:'https://example.com/app/?v=1#/stock/74530'}),'https://example.com/app/chart-data/7453.json');
+const longSnapshot=JSON.parse(fs.readFileSync('chart-long-data/7453.json','utf8'));
+assert.ok(S.parse(longSnapshot,{code:'7453'}).rows.length>1000);
+assert.throws(()=>S.parse({...longSnapshot,sourceUrl:longSnapshot.sourceUrl.replace('range=10y','range=2y')},{code:'7453'}));
+assert.equal(S.url('7453',{protocol:'https:',href:'https://example.com/app/'},{longHistory:true}),'https://example.com/app/chart-long-data/7453.json');
 function source(name){const start=html.indexOf('__modules.'+name+' = (() => {');return html.slice(start,html.indexOf('\n})();',start)+6);}
 (async()=>{
  const calls=[],memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)};

@@ -80,3 +80,6 @@ friendly-*.png
 upgrade-friendly.py
 features-public-check.cjs
 features-public-*.png
+
+forecast60-browser-smoke.cjs
+forecast60-preview.png

@@ -8,3 +8,10 @@ assert.equal(F.analyze(rows.slice(0,80)).ready,false);assert.equal(F.analyze(row
 const memory=new Map(),storage={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)};Registry.configure(storage);Registry.add({code:'3397',name:'トリドールホールディングス',sector:'小売業'});assert.equal(Registry.all([{code:'7203',name:'トヨタ自動車'}]).length,2);assert.equal(Names.display('33970'),'トリドールホールディングス');assert.equal(Names.codeOf('３３９７'),'3397');Registry.add({code:'3397',name:'トリドールホールディングス'});assert.equal(Registry.read().length,1);assert.throws(()=>Registry.add({code:'12345',name:'不正'}));memory.set('stock-edge-extra-stocks-v1','{bad');assert.throws(()=>Registry.add({code:'6228',name:'JET'}));assert.equal(memory.get('stock-edge-extra-stocks-v1'),'{bad');
 const catalog=JSON.parse(fs.readFileSync('stock-catalog.json','utf8'));assert.ok(catalog.items.length>3000);assert.equal(catalog.items.find(r=>r.code==='3397').name,'トリドールホールディングス');
 console.log('PASS: empirical scenario probabilities/paths, no look-ahead, disjoint outcome windows, insufficient data, private extra-stock registry and JPX catalog.');
+const longRows=JSON.parse(fs.readFileSync('chart-long-data/7453.json','utf8')).rows,longForecast=F.analyze(longRows,{horizon:60});
+assert.equal(F.analyze(rows,{horizon:60}).ready,false,'the old two-year sample is insufficient for 60-bar scenarios');
+assert.equal(longForecast.ready,true);assert.ok(longRows.length>1000);assert.ok(longForecast.samples>=12);
+assert.ok(Math.abs(longForecast.scenarios.reduce((s,r)=>s+r.probability,0)-1)<1e-12);
+for(const s of longForecast.scenarios)if(s.count)assert.equal(s.path.length,61);
+for(const a of longForecast.anchors){assert.ok(a+60<=longRows.length-1-60);for(const b of longForecast.anchors)if(a!==b)assert.ok(Math.abs(a-b)>=60);}
+console.log('PASS: real long history supports 60-bar scenarios without overlapping samples or invented probabilities.');

@@ -20,7 +20,9 @@ jobs:
           node-version: '22'
       - uses: actions/cache@v4
         with:
-          path: chart-data
+          path: |
+            chart-data
+            chart-long-data
           key: chart-v1-${{ github.run_id }}
           restore-keys: chart-v1-
       - name: Verify model and JavaScript

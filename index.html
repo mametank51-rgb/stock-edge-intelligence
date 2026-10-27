@@ -509,6 +509,9 @@ if(typeof module!=='undefined')module.exports=api;else root.EdgeRefresh=api;
 
 
 
+
+
+
 <!-- ORIGINAL BLOG FEEDS -->
 <script>/* Japanese display names: Nikkei official component list, 2026-10-23. */
 (function(root){
@@ -623,13 +626,14 @@ const api={normalize,splitAdjusted,completeRows,claimAudit,day,today,codeOf};if(
 'use strict';
 const Integrity=typeof module!=='undefined'&&module.exports?require('./market-integrity.js'):root.MarketIntegrity;
 function parse(body,{code,now=Date.now()}={}){
- if(body?.schema!=='stock-edge-chart-v1'||body.code!==code||!Array.isArray(body.rows)||body.rows.length<20||body.rows.length>600||!Number.isFinite(Date.parse(body.fetchedAt))||Date.parse(body.fetchedAt)>now+300000)throw Error('配信日足の銘柄・形式・取得日時を確認できません');
+ if(body?.schema!=='stock-edge-chart-v1'||body.code!==code||!Array.isArray(body.rows)||body.rows.length<20||body.rows.length>2600||!Number.isFinite(Date.parse(body.fetchedAt))||Date.parse(body.fetchedAt)>now+300000)throw Error('配信日足の銘柄・形式・取得日時を確認できません');
  const source=new URL(body.sourceUrl);if(!['query1.finance.yahoo.com','query2.finance.yahoo.com'].includes(source.hostname)||source.protocol!=='https:'||source.username||source.password||source.pathname!=='/v8/finance/chart/'+code+'.T')throw Error('配信日足の出典を確認できません');
+ if(body.historyRange==='10y'&&source.searchParams.get('range')!=='10y')throw Error('長期日足の取得範囲を確認できません');
  const payload={rows:body.rows,meta:body.meta,events:body.events||{},basis:body.basis,sourceUrl:body.sourceUrl,transport:'公開サイトの日足配信',fetchedAt:body.fetchedAt,sourceRejected:body.rejectedRows||0,sourceRejectedDates:body.rejectedDates||[]};
  const integrity=Integrity.normalize(payload,{code,now});if(integrity.rows.length<20||body.asOf!==integrity.dataAsOf)throw Error('配信日足の基準日・本数が一致しません');
- return {...payload,rows:integrity.rows,integrity};
+ return {...payload,rows:integrity.rows,integrity,historyRange:body.historyRange||'2y'};
 }
-function url(code,location){if(!Integrity.codeOf(code))throw Error('銘柄コードが不正です');const base=location?.protocol==='file:'?'https://mametank51-rgb.github.io/stock-edge-intelligence/':new URL('./',location.href).href;return new URL('chart-data/'+code+'.json',base).href;}
+function url(code,location,{longHistory=false}={}){if(!Integrity.codeOf(code))throw Error('銘柄コードが不正です');const base=location?.protocol==='file:'?'https://mametank51-rgb.github.io/stock-edge-intelligence/':new URL('./',location.href).href;return new URL((longHistory?'chart-long-data/':'chart-data/')+code+'.json',base).href;}
 const api={parse,url};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.ChartSnapshot=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
 
@@ -1549,10 +1553,10 @@ function tokyoDay(seconds){
 async function fetchJson(url,timeout=12000,interactive=false){
   const r=await window.stockEdgeRequest(url,{edgeTimeoutMs:timeout,edgePriority:interactive,credentials:'omit',cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json();
 }
-async function sharedChart(code,interactive=false){return ChartSnapshot.parse(await fetchJson(ChartSnapshot.url(code,location),12000,interactive),{code});}
-async function yahooChart(ticker,{preferShared=false,interactive=false}={}){
-  let sharedError=null;if(preferShared){try{return await sharedChart(jpCode(ticker),interactive);}catch(e){sharedError=e;}}
-  const symbol=ySymbol(ticker),direct=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=2y&interval=1d&events=div%2Csplits&includePrePost=false`;
+async function sharedChart(code,interactive=false,longHistory=false){const payload=ChartSnapshot.parse(await fetchJson(ChartSnapshot.url(code,location,{longHistory}),12000,interactive),{code});if(longHistory&&payload.historyRange!=="10y")throw Error("長期日足の配信を確認できません");return payload;}
+async function yahooChart(ticker,{preferShared=false,interactive=false,longHistory=false}={}){
+  let sharedError=null;if(preferShared){try{return await sharedChart(jpCode(ticker),interactive,longHistory);}catch(e){sharedError=e;}}
+  const symbol=ySymbol(ticker),direct=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${longHistory?'10y':'2y'}&interval=1d&events=div%2Csplits&includePrePost=false`;
   const routes=[{name:'Yahoo direct',url:direct},{name:'cors.dev relay',url:PROXY+direct}];
   let lastError=null;
   for(const route of routes){
@@ -1571,12 +1575,13 @@ async function yahooChart(ticker,{preferShared=false,interactive=false}={}){
       const payload={rows,meta:result.meta||{},events:result.events||{},basis:'split-adjusted',sourceUrl:direct,transport:route.name,sourceRejected,sourceRejectedDates};const integrity=MarketIntegrity.normalize(payload,{code:jpCode(ticker)});return {...payload,rows:integrity.rows,integrity};
     }catch(error){lastError=error;}
   }
-  if(!preferShared){try{return await sharedChart(jpCode(ticker),interactive);}catch(e){sharedError=e;}}
+  if(!preferShared){try{return await sharedChart(jpCode(ticker),interactive,longHistory);}catch(e){sharedError=e;}}
   throw new Error('標準株価ルートで取得できませんでした。通信環境または提供元の状態を確認してください。'+(lastError?.message?' ('+lastError.message+')':''));
 }
-async function fetchAndSave(ticker){
-  const downloadedAt=new Date().toISOString(),payload=await yahooChart(ticker,{preferShared:true,interactive:true}),meta=payload.meta||{};
+async function fetchAndSave(ticker,{longHistory=false}={}){
+  const downloadedAt=new Date().toISOString(),payload=await yahooChart(ticker,{preferShared:true,interactive:true,longHistory}),meta=payload.meta||{};
   const fetchedAt=payload.fetchedAt||downloadedAt;
+  const saved=workspace.getRecord?.(ticker);if(longHistory&&saved?.stock?.data_as_of>payload.integrity.dataAsOf)throw Error('長期日足の基準日が保存済み株価より古いため、更新を保留しました。');
   const expected=ySymbol(ticker).toUpperCase();
   if(meta.symbol&&String(meta.symbol).toUpperCase()!==expected)throw new Error('取得した銘柄コードを検証できません。');
   // Yahoo OHLC is split-adjusted; adjclose additionally includes dividends.
@@ -1584,6 +1589,7 @@ async function fetchAndSave(ticker){
   const chartRows=payload.rows.map(({date,open,high,low,close,volume})=>({date,open,high,low,close,volume}));
   const record=__modules.dataEvidence.parsePrices(JSON.stringify(chartRows),{ticker,market:'JP',company:StockNames.display(jpCode(ticker),meta.shortName||meta.longName||jpCode(ticker)),provider:'yahoo',basis:'adjusted',source_url:payload.sourceUrl,file_name:'preinstalled-yahoo-chart.json'});
   record.stock.source=SOURCE;record.stock.provider_id='yahoo-browser';record.stock.fetched_at=fetchedAt;record.stock.updated_at=fetchedAt;record.stock.exchange=meta.exchangeName||'JPX';record.stock.currency=meta.currency||'JPY';
+  record.provenance.history_range=longHistory?'10y':payload.historyRange||'2y';
   record.provenance.adjustment_basis='Yahoo OHLC: split-adjusted, not dividend-adjusted';record.provenance.provider='Yahoo Finance Chart (unofficial)';record.provenance.acquired_at=fetchedAt;record.provenance.transport=payload.transport;record.provenance.verification='Yahoo Financeの非公式Chartエンドポイントから自動取得。公式開示・取引所データとの照合は未実施。';
   try{workspace.saveRecord(record);}catch(e){workspace.rememberTransient(record,e.message);record.provenance.persistenceWarning=e.message;}return record;
 }
@@ -2376,6 +2382,11 @@ function todayDashboard(){
 // Embedded inside the app scope by upgrade-voice.py.
 // Embedded inside the app scope by upgrade-voice.py.
 // Embedded inside the app scope by upgrade-voice.py.
+// Embedded inside the app scope by upgrade-voice.py.
+// Embedded inside the app scope by upgrade-voice.py.
+// Embedded inside the app scope by upgrade-voice.py.
+// Embedded inside the app scope by upgrade-voice.py.
+// Embedded inside the app scope by upgrade-voice.py.
 let voiceUiVersion=0,voicePreparedVersion=-1,voicePreparedMinute=-1,voicePreparedItems=[];
 const voiceFilters={query:'',kind:'all',stance:'all',period:'fresh',source:'',topic:'all',limit:24};
 const voicePriorityCodes=new Set();
@@ -2651,7 +2662,7 @@ function catalogMatches(items,q){q=q.normalize('NFKC').toLowerCase().trim();retu
 function showStockMatches(items,query){
  const found=catalogMatches(items,query),known=new Set(__modules.nikkei225.rows().map(r=>r.code));
  const focusedCode=document.activeElement?.dataset?.stockAdd;
- document.querySelectorAll('[data-stock-entry-results]').forEach(n=>{n.setAttribute('aria-busy',String(entryBusy));const signature=JSON.stringify(found.map(r=>[r.code,r.name,r.market,known.has(r.code)]))+':'+entryBusy;if(n.dataset.matchesSignature===signature)return;n.dataset.matchesSignature=signature;n.innerHTML=found.map(r=>`<button type="button" data-stock-add="${esc(r.code)}" ${entryBusy?'disabled':''}><span class="ui-result-name">${esc(r.name)}<span class="ui-result-meta">${esc(r.code)} · ${esc(r.market||'東証')}</span></span><span class="ui-result-action">${known.has(r.code)?'開く':'追加して分析'} →</span></button>`).join('');if(focusedCode){const button=[...n.querySelectorAll('[data-stock-add]')].find(b=>b.dataset.stockAdd===focusedCode);button?.focus();}});
+ document.querySelectorAll('[data-stock-entry-results]').forEach(n=>{n.setAttribute('aria-busy',String(entryBusy));if(focusedCode&&n.contains(document.activeElement))return;const signature=JSON.stringify(found.map(r=>[r.code,r.name,r.market,known.has(r.code)]))+':'+entryBusy;if(n.dataset.matchesSignature===signature)return;n.dataset.matchesSignature=signature;n.innerHTML=found.map(r=>`<button type="button" data-stock-add="${esc(r.code)}" ${entryBusy?'disabled':''}><span class="ui-result-name">${esc(r.name)}<span class="ui-result-meta">${esc(r.code)} · ${esc(r.market||'東証')}</span></span><span class="ui-result-action">${known.has(r.code)?'開く':'追加して分析'} →</span></button>`).join('');if(focusedCode){const button=[...n.querySelectorAll('[data-stock-add]')].find(b=>b.dataset.stockAdd===focusedCode);button?.focus();}});
  return found.length;
 }
 async function searchStockEntry(){
@@ -2664,18 +2675,42 @@ async function searchStockEntry(){
 async function addStockForAnalysis(code){if(entryBusy)return;code=StockNames.codeOf(code);if(!code)throw Error('4桁の銘柄コードか英字入りコードを入力してください');entryBusy=true;entryMessage='銘柄 '+code+' の日足・銘柄コード・通貨を確認しています';document.querySelectorAll('[data-stock-entry-status]').forEach(n=>n.textContent=entryMessage);try{let info=__modules.nikkei225.rows().find(r=>r.code===code);if(!info){let catalog;try{catalog=await loadStockCatalog();}catch{}info=catalog?.items.find(r=>r.code===code)||{code,name:'銘柄 '+code,sector:'追加銘柄'};}StockNames.register(info);const record=workspace.getRecord(code+'0')||await __modules.builtinMarket.fetchAndSave(code+'0');if(!__modules.nikkei225.UNIVERSE.some(r=>r.code===code))StockRegistry.add(info);__modules.nikkei225.rememberRecord(record,info);state.data=await loadFoundation();friendlyCloseSearch();entryQuery='';entryMessage='';state.chartError='';state.detailExpanded=false;state.ticker=code+'0';location.hash='/stock/'+code+'0';if(state.route==='stock'&&fastDetailCode()===code)await render();Promise.allSettled([financialIntel.fetchOne(code),collectBrowserMarketIntel(true,[code],{compact:true})]).then(()=>{if(state.route==='stock'&&fastDetailCode()===code)render();});}catch(e){entryMessage=e.message+'。取得できない場合は「使い方」の株価ファイル読込も利用できます。';document.querySelectorAll('[data-stock-entry-status]').forEach(n=>n.textContent=entryMessage);throw e;}finally{entryBusy=false;document.querySelectorAll('[data-stock-add],[data-stock-entry] button').forEach(n=>n.disabled=false);document.querySelectorAll('[data-stock-entry-results]').forEach(n=>{n.setAttribute('aria-busy','false');delete n.dataset.matchesSignature;});}}
 const detailLoads=new Map();
 async function ensureDetailChart(ticker){if(detailLoads.has(ticker))return detailLoads.get(ticker);const work=(async()=>{try{if(!workspace.getRecord(ticker)){await __modules.builtinMarket.fetchAndSave(ticker);if(state.route!=='stock'||state.ticker!==ticker)return;state.data=await loadFoundation();}if(state.route!=='stock'||state.ticker!==ticker)return;state.detailExpanded=true;state.chartError='';await render();}catch(e){if(state.route==='stock'&&state.ticker===ticker){state.chartError=e.message;state.detailExpanded=false;await render();}}finally{detailLoads.delete(ticker);}})();detailLoads.set(ticker,work);return work;}
+const forecastLoads=new Map();
+function canFetchForecastHistory(){return state.interval==='1d'&&state.basis==='adjusted'&&(state.history?.provider_id==='yahoo-browser'||workspace.getRecord(state.ticker)?.stock?.provider_id==='yahoo-browser');}
+function forecastMissing(f){
+ const job=forecastLoads.get(state.ticker),record=workspace.getRecord(state.ticker),longLoaded=record?.provenance?.history_range==='10y';
+ if(job?.busy)return '<p class="forecast-missing" role="status">60日足先の分析用に、最大10年分の日足を読み込み中です。この銘柄だけ取得します…</p>';
+ const relevant=state.interval==='1d'&&state.basis==='adjusted'&&state.forecastHorizon===60;
+ return `<p class="forecast-missing">${esc(f.reason)}</p>${relevant&&!longLoaded&&canFetchForecastHistory()?`<p>${job?.error?esc(job.error):'60日足先には、通常表示より長い履歴が必要です。'}</p><button class="btn" data-forecast-history>長期日足を取得して再分析</button>`:relevant&&longLoaded?'<p>取得できた長期日足でも類似例が足りないため、確率は表示しません。上場後の期間や相場局面によって分析できない場合があります。</p>':relevant?'<p>この取得元の株価は自動で置き換えません。長い調整済み日足ファイルを読み込むと分析できます。</p>':''}`;
+}
+function paintForecastPresentation(){
+ const panel=document.querySelector('[data-forecast-panel]');if(panel)panel.outerHTML=forecastPanel();friendlyEnhance();
+ const chart=document.getElementById('candlestick-chart'),legend=document.querySelector('.forecast-legend');if(legend)legend.outerHTML=forecastLegend();else if(chart)chart.insertAdjacentHTML('beforebegin',forecastLegend());
+ if(chart)drawCandles(chart,state.candles,state.range,state.history||{});
+}
+async function ensureForecastHistory({retry=false}={}){
+ if(state.route!=='stock'||!canFetchForecastHistory()||state.forecastHorizon!==60||currentForecast().ready)return;
+ const ticker=state.ticker,selected=()=>state.route==='stock'&&state.ticker===ticker&&state.interval==='1d'&&state.forecastHorizon===60;
+ if(workspace.getRecord(ticker)?.provenance?.history_range==='10y'){if(state.history?.provenance?.history_range!=='10y'){state.data=await loadFoundation();if(selected()){state.history=null;await render();}}return;}
+ const previous=forecastLoads.get(ticker);if(previous?.busy||previous?.error&&!retry)return;
+ const job={busy:true,error:''};forecastLoads.set(ticker,job);paintForecastPresentation();
+ try{await __modules.builtinMarket.fetchAndSave(ticker,{longHistory:true});if(selected()){state.data=await loadFoundation();if(selected()){state.history=null;await render();}}}
+ catch(error){job.error='長期の日足を取得できませんでした。保存済みのチャートは維持しています。'+(error?.message?' '+error.message:'');}
+ finally{job.busy=false;if(selected())paintForecastPresentation();}
+}
 let forecastMemoKey='',forecastMemo=null;
 function currentForecast(){if(state.interval!=='1d'||state.history?.is_dummy!==false)return {ready:false,reason:state.interval==='1wk'?'予想シナリオは日足表示で確認できます':'実データの日足を読み込むと表示します'};if(state.basis!=='adjusted')return {ready:false,reason:'予想線には分割調整などの価格基準を確認した調整済み日足が必要です'};const rows=state.candles||[],key=[state.ticker,state.forecastHorizon||20,rows.length,rows.at(-1)?.time,rows.at(-1)?.close,state.history?.fetched_at||state.history?.imported_at,state.basis].join(':');if(key!==forecastMemoKey){forecastMemoKey=key;forecastMemo=ForecastModel.analyze(rows,{horizon:state.forecastHorizon||20});}return forecastMemo;}
-function forecastPanel(){const f=currentForecast();return `<section class="forecast-panel" data-forecast-panel><div class="forecast-title"><div><h2>これからの値動き（参考シナリオ）</h2><p>参考確率＝過去の類似局面での発生割合。将来の確率として較正された値ではありません。</p></div><label>何日足先を見る？<select data-forecast-horizon>${[5,20,60].map(n=>`<option value="${n}" ${(state.forecastHorizon||20)===n?'selected':''}>${n}本の日足先</option>`).join('')}</select></label></div>${f.ready?`<div class="forecast-cards">${f.scenarios.map(s=>`<div style="--scenario:${s.color}"><strong>${esc(s.label)}</strong><b>${(s.probability*100).toFixed(1)}%</b><span>${s.count}/${f.samples}例${!s.count?' · 該当例なし・線は非表示':''}</span>${s.path.length?`<small>代表終点 ¥${money(s.path.at(-1))}</small>`:''}</div>`).join('')}</div><p>基準日 ${esc(f.asOf)} · 類似 ${f.samples}期間 · 横ばいの範囲は約±${(f.threshold*100).toFixed(1)}%。点線は同じ分類の過去パスの代表線です。当日分は途中値の場合があり、日足確定前は参考値です。</p><details><summary>確率の根拠・不確かさを見る</summary><p>${esc(f.method)}</p><p>正しい売買方向を保証する確率ではありません。相場の変化・未観測の材料をモデルに含めません。確率0%は「該当例を観測しなかった」という意味です。</p>${f.scenarios.map(s=>`<p>${esc(s.label)}の割合の参考95%区間：${(s.interval[0]*100).toFixed(0)}〜${(s.interval[1]*100).toFixed(0)}%。独立な標本を仮定したWilson区間で、相場の依存性を保証しません。</p>`).join('')}<p>過去に向かって時点を戻した検証 ${f.validation.n}回${f.validation.brier!==null?' · 多分類Brier誤差 '+f.validation.brier.toFixed(3)+'（小さいほど誤差が小さい）':''}。少数の参考検証です。現在の予想の正しさを検証済みという意味ではありません。</p></details>`:`<p class="forecast-missing">${esc(f.reason)}</p>`}</section>`;}
+function forecastPanel(){const f=currentForecast();return `<section class="forecast-panel" data-forecast-panel><div class="forecast-title"><div><h2>これからの値動き（参考シナリオ）</h2><p>参考確率＝過去の類似局面での発生割合。将来の確率として較正された値ではありません。</p></div><label>何日足先を見る？<select data-forecast-horizon>${[5,20,60].map(n=>`<option value="${n}" ${(state.forecastHorizon||20)===n?'selected':''}>${n}本の日足先</option>`).join('')}</select></label></div>${state.interval==='1d'?`<p data-forecast-bars>分析用の日足 ${state.candles?.length||0}本${workspace.getRecord(state.ticker)?.provenance?.history_range==='10y'?' · 最大10年の取得可能な履歴':''}</p>`:''}${f.ready?`<div class="forecast-cards">${f.scenarios.map(s=>`<div style="--scenario:${s.color}"><strong>${esc(s.label)}</strong><b>${(s.probability*100).toFixed(1)}%</b><span>${s.count}/${f.samples}例${!s.count?' · 該当例なし・線は非表示':''}</span>${s.path.length?`<small>代表終点 ¥${money(s.path.at(-1))}</small>`:''}</div>`).join('')}</div><p>基準日 ${esc(f.asOf)} · 類似 ${f.samples}期間 · 横ばいの範囲は約±${(f.threshold*100).toFixed(1)}%。点線は同じ分類の過去パスの代表線です。当日分は途中値の場合があり、日足確定前は参考値です。</p><details><summary>確率の根拠・不確かさを見る</summary><p>${esc(f.method)}</p><p>正しい売買方向を保証する確率ではありません。相場の変化・未観測の材料をモデルに含めません。確率0%は「該当例を観測しなかった」という意味です。</p>${f.scenarios.map(s=>`<p>${esc(s.label)}の割合の参考95%区間：${(s.interval[0]*100).toFixed(0)}〜${(s.interval[1]*100).toFixed(0)}%。独立な標本を仮定したWilson区間で、相場の依存性を保証しません。</p>`).join('')}<p>過去に向かって時点を戻した検証 ${f.validation.n}回${f.validation.brier!==null?' · 多分類Brier誤差 '+f.validation.brier.toFixed(3)+'（小さいほど誤差が小さい）':''}。少数の参考検証です。現在の予想の正しさを検証済みという意味ではありません。</p></details>`:forecastMissing(f)}</section>`;}
 function forecastLegend(){const f=currentForecast();return f.ready?`<div class="forecast-legend"><small>点線：${f.horizon}日足先のシナリオ · 参考確率（過去類似 ${f.samples}例）</small><div>${f.scenarios.map(s=>`<span style="color:${s.color}">${esc(s.label)} ${(s.probability*100).toFixed(1)}%</span>`).join('')}</div></div>`:'';}
 app.addEventListener('click',async event=>{const b=event.target.closest('button');if(!b)return;if(b.hasAttribute('data-full-update')){runFullUpdate().catch(e=>toast(e.message));return;}if(b.hasAttribute('data-full-update-stop')){if(fullUpdateJob){fullUpdateJob.stop=true;__modules.nikkei225.stop();paintFullUpdate();}return;}if(b.dataset.stockAdd){b.disabled=true;try{await addStockForAnalysis(b.dataset.stockAdd);}catch(e){toast(e.message);}finally{b.disabled=false;}}});
 app.addEventListener('submit',async event=>{if(!event.target.matches('[data-stock-entry]'))return;event.preventDefault();entryQuery=event.target.elements.stock.value.trim();const code=StockNames.codeOf(entryQuery);if(code){try{await addStockForAnalysis(code);}catch(e){toast(e.message);}}else await searchStockEntry();});
 app.addEventListener('input',event=>{if(!event.target.hasAttribute('data-stock-query'))return;entryQuery=event.target.value;entryMessage='';clearTimeout(entryTimer);entryTimer=setTimeout(searchStockEntry,300);});
-app.addEventListener('change',event=>{if(event.target.hasAttribute('data-forecast-horizon')){state.forecastHorizon=Number(event.target.value);const panel=document.querySelector('[data-forecast-panel]');if(panel)panel.outerHTML=forecastPanel();friendlyEnhance();const chart=document.getElementById('candlestick-chart'),legend=document.querySelector('.forecast-legend');if(legend)legend.outerHTML=forecastLegend();else if(chart)chart.insertAdjacentHTML('beforebegin',forecastLegend());if(chart)drawCandles(chart,state.candles,state.range,state.history||{});}});
+app.addEventListener('change',event=>{if(event.target.hasAttribute('data-forecast-horizon')){state.forecastHorizon=Number(event.target.value);paintForecastPresentation();ensureForecastHistory();}});
+app.addEventListener('click',event=>{if(event.target.closest('[data-forecast-history]'))ensureForecastHistory({retry:true});});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&fullUpdateJob?.status==='paused'&&!fullUpdateJob.stop)runFullUpdate();});
 
 // App-scope presentation helpers. Analysis models and saved evidence stay unchanged.
-let friendlySearchOpen=false,friendlySearchFocus=null,friendlySelection=null;
+let friendlySearchOpen=false,friendlySearchFocus=null,friendlySelection=null,friendlyFocusedResult=null;
 const friendlyDisclosures=new Map();
 function friendlySector(value){return ({'Air Transport':'空運','Automobiles & Auto parts':'自動車・部品',Banking:'銀行',Chemicals:'化学',Construction:'建設','Electric Machinery':'電気機器','Electric Power':'電力',Fishery:'水産',Foods:'食品',Gas:'ガス','Glass & Ceramics':'ガラス・土石','Information and Communications':'情報・通信',Insurance:'保険','Land Transport':'陸運',Machinery:'機械','Marine Transport':'海運',Mining:'鉱業','Nonferrous Metals':'非鉄金属','Other Financial Services':'その他金融','Other Manufacturing':'その他製造',Petroleum:'石油',Pharmaceuticals:'医薬品','Precision Instruments':'精密機器','Pulp & Paper':'パルプ・紙','Railway & Bus':'鉄道・バス','Real Estate':'不動産',Retail:'小売',Rubber:'ゴム',Securities:'証券',Services:'サービス',Shipbuilding:'造船',Steel:'鉄鋼','Textiles & Apparel':'繊維','Trading Companies':'商社'})[value]||value||'業種未取得';}
 function friendlyTools(){
@@ -2706,7 +2741,7 @@ function friendlyWatchlist(){
 function friendlyChartStart(){return `<div class="ui-page-heading"><span class="ui-kicker">チャート</span><h1>最初に、銘柄を選びましょう</h1><p>社名や4桁のコードから検索すると、株価チャート・参考シナリオ・記事を確認できます。</p><button class="btn primary" data-ui-search-open>チャートを見る銘柄を探す</button></div>`;}
 function friendlyOpenSearch(){const dialog=document.getElementById('ui-stock-search');if(!dialog)return;friendlySearchFocus=document.activeElement;friendlySearchOpen=true;dialog.showModal();const input=dialog.querySelector('[data-stock-query]');input?.focus();input?.select();if(entryQuery.trim())searchStockEntry();}
 function friendlyCloseSearch(){friendlySearchOpen=false;document.getElementById('ui-stock-search')?.close();friendlySearchFocus?.isConnected&&friendlySearchFocus.focus();}
-function friendlyCaptureUI(){const dialog=document.getElementById('ui-stock-search');if(dialog){friendlySearchOpen=dialog.open;const input=dialog.querySelector('[data-stock-query]');friendlySelection=document.activeElement===input?[input.selectionStart,input.selectionEnd]:null;}for(const node of document.querySelectorAll('.ui-refresh-settings,.ui-update-explanation,.ui-analysis-details,.ui-research-workbench,.ui-data-source,.ui-chart-options'))friendlyDisclosures.set(state.route+':'+(state.route==='stock'?state.ticker:'')+':'+node.className,node.open);}
+function friendlyCaptureUI(){const dialog=document.getElementById('ui-stock-search');if(dialog){friendlySearchOpen=dialog.open;friendlyFocusedResult=document.activeElement?.dataset?.stockAdd||null;const input=dialog.querySelector('[data-stock-query]');friendlySelection=document.activeElement===input?[input.selectionStart,input.selectionEnd]:null;}for(const node of document.querySelectorAll('.ui-refresh-settings,.ui-update-explanation,.ui-analysis-details,.ui-research-workbench,.ui-data-source,.ui-chart-options'))friendlyDisclosures.set(state.route+':'+(state.route==='stock'?state.ticker:'')+':'+node.className,node.open);}
 function friendlyEnhance(){
  for(const node of document.querySelectorAll('.ui-refresh-settings,.ui-update-explanation,.ui-analysis-details,.ui-research-workbench,.ui-data-source,.ui-chart-options')){const open=friendlyDisclosures.get(state.route+':'+(state.route==='stock'?state.ticker:'')+':'+node.className);if(open!==undefined)node.open=open;}
  document.querySelector('[data-ui-settings-open]')?.setAttribute('aria-expanded',String(document.getElementById('ui-refresh-settings')?.open));
@@ -2716,7 +2751,7 @@ function friendlyEnhance(){
   const axes=detail.querySelector('.fast-axis-grid');if(axes)axes.id='stock-analysis';
   if(!detail.querySelector('.ui-detail-nav'))detail.querySelector('.fast-detail-head')?.insertAdjacentHTML('afterend',`<nav class="ui-detail-nav" aria-label="この銘柄の情報"><button data-ui-jump="stock-chart">チャート</button><button data-ui-jump="stock-forecast">予想</button><button data-ui-jump="stock-analysis">分析の根拠</button><button data-ui-jump="market-voice-stock">記事・意見</button></nav>`);
  }
- if(friendlySearchOpen){const dialog=document.getElementById('ui-stock-search');if(dialog&&!dialog.open){dialog.showModal();const input=dialog.querySelector('[data-stock-query]');input?.focus();if(friendlySelection)input?.setSelectionRange(...friendlySelection);if(entryQuery.trim())searchStockEntry();}}
+ if(friendlySearchOpen){const dialog=document.getElementById('ui-stock-search');if(dialog&&!dialog.open){dialog.showModal();const input=dialog.querySelector('[data-stock-query]');input?.focus();if(friendlySelection)input?.setSelectionRange(...friendlySelection);if(entryQuery.trim())searchStockEntry();if(friendlyFocusedResult)[...dialog.querySelectorAll('[data-stock-add]')].find(n=>n.dataset.stockAdd===friendlyFocusedResult)?.focus();}}
 }
 app.addEventListener('click',event=>{
  if(event.target.closest('[data-ui-search-link]'))friendlyCloseSearch();
@@ -2933,13 +2968,13 @@ async function render() {
       state.detail=stock; state.candles=history.candles; state.history=history;
       state.evidencePatterns=history.interval==='1d'?__modules.dataEvidence.doubleBottoms(history.candles):[];if(!state.evidencePatterns.some(p=>p.id===state.evidenceId))state.evidenceId=state.evidencePatterns[0]?.id||null;
       const selectedPattern=state.evidencePatterns.find(p=>p.id===state.evidenceId);
-      if(selectedPattern&&state.range&&selectedPattern.a<history.candles.length-state.range)state.range=0;
       history.evidence=selectedPattern;history.showSMA=state.showSMA;
       app.innerHTML=shell(fastDetailPage(stock));friendlyEnhance();paintBackgroundStatus();
       const container=document.querySelector('#candlestick-chart');
       if (!container) return;
       const paint=()=>drawCandles(container,state.candles,state.range,state.history||{});
       paint(); chartObserver=new ResizeObserver(paint); chartObserver.observe(container);
+      if(state.forecastHorizon===60)queueMicrotask(()=>ensureForecastHistory());
     } catch (error) {
       if (epoch!==renderEpoch) return;
       state.detailExpanded=false;state.chartError=error.message;state.history=null;state.candles=[];
@@ -3205,7 +3240,7 @@ app.addEventListener('click',async event=>{
     try {
       const ticker=button.dataset.chartRefresh,localRecord=workspace.read().records[ticker];
       if(!readBackend()&&localRecord?.stock?.provider_id==='yahoo-browser'){
-        await __modules.builtinMarket.fetchAndSave(ticker);state.history=null;await boot();toast('最新の日足を取得して保存しました');
+        await __modules.builtinMarket.fetchAndSave(ticker,{longHistory:state.forecastHorizon===60});state.history=null;await boot();toast('最新の日足を取得して保存しました');
       }else{
         const history=await request(`/stocks/${encodeURIComponent(ticker)}/refresh?interval=${state.interval}&basis=${state.basis}`,{method:'POST'});
         state.history=history;state.data=await loadFoundation();toast(history.error_message||(localDemo()?'保存データを再表示しました':'価格データを取得し、DBへ保存しました'),!!history.error_code);await render();
