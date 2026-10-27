@@ -96,3 +96,7 @@ fund-probe-*.txt
 fundamental-browser-smoke.cjs
 fundamental-public-check.cjs
 fundamental-*.png
+
+chart-overlays-browser-smoke.cjs
+chart-overlays-public-check.cjs
+overlays-*.png
