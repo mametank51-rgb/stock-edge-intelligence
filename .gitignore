@@ -91,3 +91,8 @@ compact-analysis-smoke.cjs
 compact-analysis-baseline.json
 compact-*.png
 compact-public-check.cjs
+
+fund-probe-*.txt
+fundamental-browser-smoke.cjs
+fundamental-public-check.cjs
+fundamental-*.png

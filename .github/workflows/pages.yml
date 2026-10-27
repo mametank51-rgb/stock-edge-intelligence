@@ -23,6 +23,7 @@ jobs:
           path: |
             chart-data
             chart-long-data
+            financial-data
           key: chart-v1-${{ github.run_id }}
           restore-keys: chart-v1-
       - name: Verify model and JavaScript

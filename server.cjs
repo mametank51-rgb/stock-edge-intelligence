@@ -23,6 +23,7 @@ const server=http.createServer(async(req,res)=>{
  const files={'/':'index.html','/index.html':'index.html','/STOCK_EDGE_INTELLIGENCE_EVOLVED.html':'index.html','/community-data.json':'community-data.json','/stock-catalog.json':'stock-catalog.json'};
  const chartPath=u.pathname.match(/^\/chart-data\/([1-9][0-9]{2}[0-9A-Z]|index)\.json$/);if(chartPath&&fs.existsSync(path.join(__dirname,'chart-data',chartPath[1]+'.json')))files[u.pathname]='chart-data/'+chartPath[1]+'.json';
  const longPath=u.pathname.match(/^\/chart-long-data\/([1-9][0-9]{2}[0-9A-Z]|index)\.json$/);if(longPath&&fs.existsSync(path.join(__dirname,'chart-long-data',longPath[1]+'.json')))files[u.pathname]='chart-long-data/'+longPath[1]+'.json';
+ const fundPath=u.pathname.match(/^\/financial-data\/([1-9][0-9]{2}[0-9A-Z]|index)\.json$/);if(fundPath&&fs.existsSync(path.join(__dirname,'financial-data',fundPath[1]+'.json')))files[u.pathname]='financial-data/'+fundPath[1]+'.json';
  if(!files[u.pathname]){res.writeHead(404);res.end();return;}
  res.writeHead(200,{'Content-Type':u.pathname.endsWith('.json')?'application/json; charset=utf-8':'text/html; charset=utf-8'});fs.createReadStream(path.join(__dirname,files[u.pathname])).pipe(res);
 });
