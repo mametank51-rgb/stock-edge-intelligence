@@ -86,3 +86,8 @@ forecast60-preview.png
 
 explain-browser-smoke.cjs
 explain-*.png
+
+compact-analysis-smoke.cjs
+compact-analysis-baseline.json
+compact-*.png
+compact-public-check.cjs
