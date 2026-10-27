@@ -83,3 +83,6 @@ features-public-*.png
 
 forecast60-browser-smoke.cjs
 forecast60-preview.png
+
+explain-browser-smoke.cjs
+explain-*.png
