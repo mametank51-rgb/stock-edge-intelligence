@@ -72,7 +72,7 @@ A→B→AではAの詳細DOMとSVGを再接続し、同じデータ・幅・表�
 - verify-performance.cjs：閲覧と更新範囲、ウォッチ追加/解除、225固定、重複、旧ジョブ除外、再試行待ち、同一Promise、改訂検出、A→B→A、LRUと保存互換性。
 - verify-performance-job.cjs：実際のrunFullUpdateを実行し、225/226銘柄の正規化・各処理マップ・再開/新規・失敗/待機/残りの集計を検証。
 - verify-performance-scan.cjs：実scanでlegacy retryAtの強制更新時の尊重、成功時のリセット、同時更新で別銘柄の行が消えないことを検証。
-- performance-browser-smoke.cjs：Aのroot/SVG/shellの同一性、分析missとチャート描画数が増えないこと、12回の再訪で通信と保持数が増えないこと、財務・ニュース・ウォッチの部分更新、変更価格の差し替え、遅延SWR、23銘柄の上限、既存localStorage、再試行前の手動取得抑止、320〜1280pxを検証。
+- performance-browser-smoke.cjs：Aのroot/SVG/shellの同一性、分析missとチャート描画数が増えないこと、12回の再訪で通信と保持数が増えないこと、財務・ニュース・ウォッチの部分更新と資金管理の入力保持、変更価格の差し替え、遅延SWR、23銘柄の上限、既存localStorage、再試行前の手動取得抑止、320〜1280pxを検証。
 - chart-overlays-browser-smoke.cjs：W/M、トレンド、支持抵抗、移動平均、変動帯、予想、週足、60本先、設定の保存・開閉を回帰検証。
 - friendly-browser-smoke.cjs：検索、追加銘柄、日本語表示、ウォッチ、キーボード操作、メモ入力、スマホ/PCを回帰検証。
 - 既存15検証と新規3検証を含む18スイートを通過。スコアと予想の計算モデル・既存データは変更していません。
