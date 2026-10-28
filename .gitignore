@@ -136,3 +136,22 @@ optimize-short-technical-ui.py
 fix-technical-smoke.py
 
 extend-technical-live-check.py
+
+integrate-proverbs.py
+
+wire-proverb-ui.py
+proverb-*.png
+
+inspect-proverb-test.py
+
+fix-proverb-fixtures.py
+
+polish-proverb-ui.py
+
+refine-proverb-scope.py
+
+finish-proverb-docs.py
+
+final-proverb-review.py
+
+finalize-proverb-output.py
