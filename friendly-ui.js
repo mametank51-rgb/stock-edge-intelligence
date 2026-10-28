@@ -32,7 +32,7 @@ function friendlyOpenSearch(){const dialog=document.getElementById('ui-stock-sea
 function friendlyCloseSearch(){friendlySearchOpen=false;document.getElementById('ui-stock-search')?.close();friendlySearchFocus?.isConnected&&friendlySearchFocus.focus();}
 function friendlyCaptureUI(){captureAnalysisPanels();const dialog=document.getElementById('ui-stock-search');if(dialog){friendlySearchOpen=dialog.open;friendlyFocusedResult=document.activeElement?.dataset?.stockAdd||null;const input=dialog.querySelector('[data-stock-query]');friendlySelection=document.activeElement===input?[input.selectionStart,input.selectionEnd]:null;}for(const node of document.querySelectorAll('.ui-refresh-settings,.ui-update-explanation,.ui-update-counts,.ui-analysis-details,.ui-research-workbench,.ui-data-source,.ui-chart-options'))friendlyDisclosures.set(state.route+':'+(state.route==='stock'?state.ticker:'')+':'+node.className,node.open);}
 function friendlyEnhance(){
- fundamentalEnhance();
+ if(selectedAnalysisMode!=='short')fundamentalEnhance();
  restoreAnalysisPanels();
  for(const node of document.querySelectorAll('.ui-refresh-settings,.ui-update-explanation,.ui-update-counts,.ui-analysis-details,.ui-research-workbench,.ui-data-source,.ui-chart-options')){const open=friendlyDisclosures.get(state.route+':'+(state.route==='stock'?state.ticker:'')+':'+node.className);if(open!==undefined)node.open=open;}
  document.querySelector('[data-ui-settings-open]')?.setAttribute('aria-expanded',String(document.getElementById('ui-refresh-settings')?.open));
@@ -43,6 +43,7 @@ function friendlyEnhance(){
   if(!detail.querySelector('.ui-detail-nav'))detail.querySelector('.fast-detail-head')?.insertAdjacentHTML('afterend',`<nav class="ui-detail-nav" aria-label="この銘柄の情報"><button data-ui-jump="stock-chart">チャート</button><button data-ui-jump="stock-forecast">予想</button><button data-ui-jump="stock-combined">総合評価</button><button data-ui-jump="stock-company">企業・財務</button><button data-ui-jump="stock-analysis">分析の根拠</button><button data-ui-jump="market-voice-stock">記事・意見</button></nav>`);
  }
  if(friendlySearchOpen){const dialog=document.getElementById('ui-stock-search');if(dialog&&!dialog.open){dialog.showModal();const input=dialog.querySelector('[data-stock-query]');input?.focus();if(friendlySelection)input?.setSelectionRange(...friendlySelection);if(entryQuery.trim())searchStockEntry();if(friendlyFocusedResult)[...dialog.querySelectorAll('[data-stock-add]')].find(n=>n.dataset.stockAdd===friendlyFocusedResult)?.focus();}}
+ enhanceAnalysisModes();
 }
 app.addEventListener('click',event=>{
  if(event.target.closest('[data-ui-search-link]'))friendlyCloseSearch();

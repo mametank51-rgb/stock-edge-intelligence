@@ -5,7 +5,7 @@
   "description": "日本株の分析・情報比較を支援するHTMLダッシュボード",
   "scripts": {
     "start": "node server.cjs",
-    "test": "node verify.cjs && node verify-refresh.cjs && node verify-voice.cjs && node verify-community.cjs && node verify-research.cjs && node verify-integrity.cjs && node verify-paper.cjs && node verify-debug.cjs && node verify-debug-more.cjs && node verify-display.cjs && node verify-chart-snapshot.cjs && node verify-features.cjs && node verify-explain.cjs && node verify-fundamental.cjs && node verify-overlays.cjs && node verify-performance.cjs && node verify-performance-job.cjs && node verify-performance-scan.cjs",
+    "test": "node verify.cjs && node verify-refresh.cjs && node verify-voice.cjs && node verify-community.cjs && node verify-research.cjs && node verify-integrity.cjs && node verify-paper.cjs && node verify-debug.cjs && node verify-debug-more.cjs && node verify-display.cjs && node verify-chart-snapshot.cjs && node verify-features.cjs && node verify-explain.cjs && node verify-fundamental.cjs && node verify-overlays.cjs && node verify-performance.cjs && node verify-performance-job.cjs && node verify-performance-scan.cjs && node verify-short.cjs",
     "build": "node build.cjs"
   },
   "engines": {
