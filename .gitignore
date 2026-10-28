@@ -100,3 +100,7 @@ fundamental-*.png
 chart-overlays-browser-smoke.cjs
 chart-overlays-public-check.cjs
 overlays-*.png
+
+performance-browser-smoke.cjs
+performance-public-check.cjs
+performance-*.png

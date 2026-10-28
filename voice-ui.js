@@ -16,7 +16,7 @@ function voiceCompany(code){return StockNames.display(code,EdgeModel.aliases[cod
 function voiceSearchLink(code=''){return 'https://news.google.com/search?q='+encodeURIComponent((code?code+' '+voiceCompany(code)+' ':'日本株 ')+'アナリスト 目標株価')+'&hl=ja&gl=JP&ceid=JP:ja';}
 function voicePageLink(code=''){return '#/voice'+(code?'/'+encodeURIComponent(code):'');}
 function voiceChannelName(channel){return ({analyst:'アナリスト関連記事',community:'個人投資家・ブログ',video:'動画・解説',official:'企業発信関連記事',media:'ニュース'})[channel]||'ニュース';}
-function voiceJobStatus(code,items){const db=marketVoice.read();return VoiceView.status({items,scan:db.collector?.scans?.[code],running:window.__stockEdgeBg.intelRunning&&window.__stockEdgeBg.intelCodes?.includes(code),requested:voicePriorityCodes.has(code)});}
+function voiceJobStatus(code,items){const db=marketVoice.read();return VoiceView.status({items,scan:{...db.collector?.scans?.[code],...requestCoordinator.retry('news:'+code,db.collector?.scans?.[code]||{})},running:window.__stockEdgeBg.intelRunning&&window.__stockEdgeBg.intelCodes?.includes(code),requested:voicePriorityCodes.has(code)});}
 function voiceStatusLine(code,items){
  const db=marketVoice.read(),scan=db.collector?.scans?.[code],status=voiceJobStatus(code,items);
  return `<div class="voice-status-line ${status.kind}" role="status" data-voice-job="${esc(code)}">${esc(status.label)}${scan?.at?' · 最終検索 '+esc(voiceDate(new Date(scan.at).toISOString())):''}${scan?.failures&&scan.retryAt?' · 再試行目安 '+esc(voiceDate(new Date(scan.retryAt).toISOString())):''}</div>`;
@@ -82,7 +82,6 @@ async function requestStockVoice(code){
  if(!__modules.nikkei225.rows().some(r=>r.code===code)){toast('ランキングから実際の銘柄を選んでください。');return;}
  voicePriorityCodes.add(code);
  refreshVisibleMarketVoice();
- if(window.__stockEdgeBg.intelRunning){toast('収集中の処理が終わり次第、この銘柄を優先取得します。');refreshVisibleMarketVoice();scheduleVoice(500);return;}
  await collectBrowserMarketIntel(true,[code]);refreshVisibleMarketVoice(true);scheduleVoice(500);
 }
 app.addEventListener('click',async event=>{

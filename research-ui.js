@@ -46,6 +46,7 @@ function saveResearchNote(code,patch={}){
 }
 async function refreshResearchCompany(code,{manual=true}={}){
  if(!VoiceResearch.codeOf(code)||researchUi.busy.has(code))return;
+ if((researchQuotes()[code]?.retryAt||0)>Date.now()){if(manual)toast('再試行時刻まで保存済みの根拠を表示します');return;}
  researchUi.busy.add(code);if(manual)refreshResearchPanels();
  try{
   const results=await Promise.allSettled([(async()=>{const payload=await __modules.builtinMarket.yahooChart(code+'0');if(String(payload.meta?.symbol||'').toUpperCase()!==code+'.T'||payload.meta?.currency&&payload.meta.currency!=='JPY')throw Error('取得株価の銘柄コード・通貨が一致しません');paperRememberSeries(code,payload);const t=__modules.technicalEngine.analyze(payload.rows);if(!t)throw Error('日足不足');const quotes=researchStored(RESEARCH_QUOTES);quotes[code]={code,name:StockNames.display(code,payload.meta.shortName||code),price:t.price,m20:t.m20,rsi:t.rsi,dataAsOf:t.dataAsOf,fetchedAt:new Date().toISOString(),symbol:payload.meta.symbol,priceBasis:payload.integrity?.basis||'基準未確認',identityVerified:!!payload.integrity?.identityVerified};const keep=Object.fromEntries(Object.entries(quotes).sort((a,b)=>String(b[1].fetchedAt).localeCompare(String(a[1].fetchedAt))).slice(0,60));HTML_CONTEXT.storage.setItem(RESEARCH_QUOTES,JSON.stringify(keep));})(),financialIntel.fetchOne(code,manual)]);
@@ -55,7 +56,7 @@ async function refreshResearchCompany(code,{manual=true}={}){
 }
 async function refreshResearchWatch(){
  if(!refreshPolicy().active||document.hidden)return;
- const quotes=researchStored(RESEARCH_QUOTES),codes=Object.entries(researchNotes()).filter(([code,n])=>n.status!=='rejected'&&(quotes[code]?.retryAt||0)<=Date.now()&&Date.now()-Date.parse(quotes[code]?.fetchedAt||0)>30*60000).slice(0,2).map(([code])=>code);
+ const quotes=researchStored(RESEARCH_QUOTES),codes=Object.entries(researchNotes()).filter(([code,n])=>getAutoUpdateCodes().includes(code)&&n.status!=='rejected'&&(quotes[code]?.retryAt||0)<=Date.now()&&Date.now()-Date.parse(quotes[code]?.fetchedAt||0)>30*60000).slice(0,2).map(([code])=>code);
  if(!codes.length)return;await EdgeRefresh.pool(codes,1,code=>refreshResearchCompany(code,{manual:false}),{shouldContinue:()=>refreshPolicy().active});refreshResearchPanels();
 }
 app.addEventListener('click',async event=>{
