@@ -52,3 +52,17 @@ Trend25 / Momentum20 / Volume20 / Setup15 / Market Context10 / Risk10。Riskは�
 - 既存 `performance-browser-smoke.cjs` と `chart-overlays-browser-smoke.cjs` で中長期の回帰確認。
 
 GitHub Pagesのビルド・配信構成は従来どおりです。短期データを全銘柄収集したり、公開成果物へ保存したりしません。
+
+## 短期テクニカル分析の追加
+
+チャート直下に15項目の分析を追加しました。EMA9/21・VWAP・ADX/DMI・RSI・MACD・ストキャスティクス・CCI・ボリンジャー・出来高倍率・MFI・OBV・支持抵抗/レンジ・W/M/トレンドライン・ローソク足・ATRを、上向き/下向き/中立/注意/保留で表示します。「流れ」「勢い」「出来高」「形」「リスク」の各欄を開くと、数値の意味・次に見る条件・設定が分かります。SHORT EDGEへ重複加算する別スコアは作っていません。
+
+計算は `short-technical.js`、表示は `short-technical-ui.js` に分離。既存の確定足・EMA/VWAP/RSI/MACD/ATRを再利用し、追加分析は最大12組をキャッシュします。表示オプション変更で再取得・再計算せず、同じ分析データなら詳細DOMも保持します。
+
+W底/W天井・トレンドライン・支持抵抗・ボリンジャーをチャートへ表示できます。表示設定は短期専用の `stock-edge-short-overlays-v1` に保存し、中長期設定と分離しています。山谷は後続3本で確定し、未確定足をパターン・トレンド・追加指標の判定へ使いません。価格によるネックラインの抜けと、その足の出来高1.5倍以上の確認を分けて表示します。該当パターンがなければ図形を作りません。
+
+中長期のパターン判定は変更せず、短期では `ChartOverlays.build` の追加オプション `patternRules` を使用します。形の深さは5分足0.2%、15分足0.3%、60分足0.5%以上とATRの2倍以上を併用し、山谷の価格差も制限しています。日足モードは従来の3%条件です。これらの閾値は未校正の初期設定で、勝率を示しません。
+
+ADX/DMIは14本のWilder平滑化、ストキャスティクスは9/3、CCI・MFIは14本、OBVは10本の変化を出来高合計で正規化します。平坦な価格・出来高0・不足データではゼロ除算を避け、出来高を必要とする指標は保留とします。[DMIの計算・解釈](https://www.fidelity.com/learning-center/trading-investing/technical-analysis/technical-indicator-guide/DMI)、[MFIの解釈](https://www.fidelity.com/learning-center/trading-investing/technical-analysis/technical-indicator-guide/mfi)を参照しています。
+
+追加テスト `verify-short-technical.cjs` では、短期のW/Mと従来の日足条件の分離、出来高の裏付け、未確定足の除外、4時間足、Wilder方式、出来高0・平坦・不足データを検証します。ブラウザテストでは実際のW底を含む制御データで図形・表示切替・SVG再利用・通信数・詳細の保持・320〜1280pxの表示も確認します。

@@ -1,7 +1,8 @@
 /* Observed-price overlays. Pivots require three following bars; no future forecast values used. */
 (function(root){'use strict';
 const finite=Number.isFinite,defaults={patterns:true,bothPatterns:false,trend:true,levels:true,sma20:true,sma50:false,bands:false,forecast:true};
-function build(all,{count=60,options={}}={}){
+function build(all,{count=60,options={},patternRules={}}={}){
+ const rules={minDepthPct:.03,priorMovePct:.03,matchPct:.015,maxMatchPct:.035,...patternRules};
  const flags={...defaults,...options},n=all?.length||0,offset=count>0?Math.max(0,n-count):0,empty={offset,flags,series:[],levels:[],trends:[],patterns:[],hiddenPatterns:[],pivots:[],asOf:all?.at(-1)?.time||all?.at(-1)?.date||null};
  if(!n||!all.every(r=>r&&[r.open,r.high,r.low,r.close].every(finite)&&r.low>0&&r.high>=Math.max(r.open,r.low,r.close)&&r.low<=Math.min(r.open,r.close)))return empty;
  const idx=i=>({i,time:all[i].time||all[i].date}),start=Math.max(0,n-250),pivots={low:[],high:[]};
@@ -13,10 +14,10 @@ function build(all,{count=60,options={}}={}){
  const patterns=[];
  // Same bounded rule mirrored for W and M, using actual high/low anchors.
  if(flags.patterns&&n>=35)for(const kind of ['W','M']){const bottom=kind==='W',side=bottom?'low':'high',opposite=bottom?'high':'low',sign=bottom?1:-1,candidates=[];
-  for(let q=1;q<pivots[side].length;q++){const b=pivots[side][q];if(n-1-b.i>40)continue;for(let p=q-1;p>=0;p--){const a=pivots[side][p],distance=b.i-a.i;if(distance>60)break;if(distance<8||a.i<10)continue;const atr=atrAt(b.i),mean=(a.price+b.price)/2,tolerance=Math.max(1.5*atr,.015*mean);if(!atr||Math.abs(a.price-b.price)>tolerance||Math.abs(a.price-b.price)>mean*.035)continue;
+  for(let q=1;q<pivots[side].length;q++){const b=pivots[side][q];if(n-1-b.i>40)continue;for(let p=q-1;p>=0;p--){const a=pivots[side][p],distance=b.i-a.i;if(distance>60)break;if(distance<8||a.i<10)continue;const atr=atrAt(b.i),mean=(a.price+b.price)/2,tolerance=Math.max(1.5*atr,rules.matchPct*mean);if(!atr||Math.abs(a.price-b.price)>tolerance||Math.abs(a.price-b.price)>mean*rules.maxMatchPct)continue;
    const middle=all.slice(a.i+1,b.i);if(middle.some(r=>sign*(r[side]-Math.min(sign*a.price,sign*b.price)*sign)<-.25*atr))continue;
-   let neck=a.i+1;for(let k=a.i+2;k<b.i;k++)if(sign*(all[k][opposite]-all[neck][opposite])>0)neck=k;const neckline=all[neck][opposite],depth=sign*(neckline-mean);if(depth<Math.max(2*atr,.03*mean)||neck-a.i<2||b.i-neck<2)continue;
-   const prior=all.slice(a.i-10,a.i),before=bottom?Math.max(...prior.map(r=>r.close)):Math.min(...prior.map(r=>r.close));if(sign*(before-a.price)<Math.max(2*atr,.03*mean))continue;
+   let neck=a.i+1;for(let k=a.i+2;k<b.i;k++)if(sign*(all[k][opposite]-all[neck][opposite])>0)neck=k;const neckline=all[neck][opposite],depth=sign*(neckline-mean);if(depth<Math.max(2*atr,rules.minDepthPct*mean)||neck-a.i<2||b.i-neck<2)continue;
+   const prior=all.slice(a.i-10,a.i),before=bottom?Math.max(...prior.map(r=>r.close)):Math.min(...prior.map(r=>r.close));if(sign*(before-a.price)<Math.max(2*atr,rules.priorMovePct*mean))continue;
    const invalidation=bottom?Math.min(a.price,b.price)-.5*atr:Math.max(a.price,b.price)+.5*atr;let breakout=null,invalid=null;
    for(let k=b.confirmedAt;k<n;k++){if(invalid===null&&sign*(all[k].close-invalidation)<0)invalid=k;if(breakout===null&&sign*(all[k].close-neckline)>.1*atr)breakout=k;}
    const status=invalid!==null?'invalidated':breakout!==null?(sign*(all.at(-1).close-neckline)>0?'breakout':'retest'):'candidate';if(status==='invalidated')continue;

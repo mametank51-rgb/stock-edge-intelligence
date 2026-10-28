@@ -124,3 +124,15 @@ final-short-polish.py
 fix-hour-session.py
 
 short-tooltip-fix.py
+
+integrate-short-technical.py
+
+finish-short-technical.py
+
+test-short-technical-ui.py
+
+optimize-short-technical-ui.py
+
+fix-technical-smoke.py
+
+extend-technical-live-check.py
