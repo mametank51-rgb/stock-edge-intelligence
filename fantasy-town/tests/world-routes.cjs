@@ -9,4 +9,7 @@ assert.equal(blocked(735+120,280),true,'harbour water should be blocked');
 const step=10,cols=275,rows=171,start=[141,48],queue=[start],seen=new Set([start.join(',')]);
 for(let i=0;i<queue.length;i++){const [x,y]=queue[i];for(const [dx,dy] of [[0,1],[1,0],[0,-1],[-1,0]]){const xx=x+dx,yy=y+dy,key=`${xx},${yy}`;if(xx<0||yy<0||xx>=cols||yy>=rows||seen.has(key)||blocked(xx*step+5,yy*step+5))continue;seen.add(key);queue.push([xx,yy])}}
 for(const [name,x,y] of [['inn',1301,250],['smith',1615,695],['market',1679,405],['pier',875,180],['riverbank',1100,580],['west',200,500],['east',2500,500],['south',1400,1450]])assert.ok(seen.has(`${Math.floor(x/step)},${Math.floor(y/step)}`),`${name} is unreachable`);
+const npcModule=new Module('npc-data',module);npcModule._compile(esbuild.buildSync({entryPoints:['src/game/data/npcs.ts'],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text,__filename);
+for(const npc of npcModule.exports.townNpcs){assert.equal(blocked(npc.x,npc.y),false,`${npc.id} starts inside an obstacle`);let reachable=false;for(const cell of seen){const [x,y]=cell.split(',').map(Number);if(Math.hypot(x*step+5-npc.x,y*step+5-npc.y)<npc.interactionRadius-10){reachable=true;break}}assert.ok(reachable,`${npc.id} cannot be approached`)}
+console.log(`PASS: all ${npcModule.exports.townNpcs.length} NPCs can be approached from town`);
 console.log('PASS: river, bridge, bank and routes to town districts');

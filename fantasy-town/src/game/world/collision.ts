@@ -1,4 +1,5 @@
 type Rect=readonly [number,number,number,number];
+export const ORIGINAL_OFFSET_X=735;
 // Collision approximations are intentionally separate from the flattened image.
 export const BLOCKS:readonly Rect[]=[
  // Western water. The bridge at y=340–382 remains open.

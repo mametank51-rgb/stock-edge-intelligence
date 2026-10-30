@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 // Coordinates correspond to the supplied 1280 × 853 image, in image pixels.
 export const WORLD_WIDTH=2750, WORLD_HEIGHT=1706;
-export const ORIGINAL_OFFSET_X=735;
+export {ORIGINAL_OFFSET_X} from './collision';
 import {WORLD_BLOCKS} from './collision';
 export class Town {
  readonly obstacles:Phaser.Physics.Arcade.StaticGroup;

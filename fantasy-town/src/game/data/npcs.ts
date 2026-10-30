@@ -1,4 +1,5 @@
 import {appearancePresets} from '../characters/definitions';import type {NpcDefinition,MovementType} from '../npc/types';import type {Profession,Race} from '../characters/definitions';
+import {ORIGINAL_OFFSET_X} from '../world/collision';
 function npc(id:string,name:string,role:string,x:number,y:number,race:Race,profession:Profession,preset:number,movementType:MovementType,line:string,extra:Partial<NpcDefinition>={}):NpcDefinition{return {id,name,role,x,y,race,profession,appearance:{...appearancePresets[preset%appearancePresets.length]},movementType,dialogueSet:[line],interactionRadius:90,...extra}}
 export const npcDefinitions:NpcDefinition[]=[
  npc('guard_north','ロウェン','衛兵',740,265,'Human','Warrior',0,'PATROL','町の外へ行くなら、支度をしておけ。',{patrolPoints:[{x:740,y:265},{x:835,y:265}]}),
@@ -16,3 +17,7 @@ export const npcDefinitions:NpcDefinition[]=[
  npc('elder','オルナ','長老',404,300,'Human','Priest',3,'STATIC','この町の木々は、昔から旅人を見守っている。'),
  npc('child','ミア','子ども',610,390,'Human','Rogue',1,'WANDER','橋の向こうまで競争しよう！',{wanderRadius:25}),
 ];
+
+// Source-image coordinates are projected into the appropriate district once.
+const districtOffsets:Record<string,{x:number;y:number}>={elder:{x:-330,y:0},child:{x:1685,y:0},farmer:{x:405,y:853},craftsman:{x:1140,y:853},guard_south:{x:-330,y:853}};
+export const townNpcs:NpcDefinition[]=npcDefinitions.map(d=>{const offset=districtOffsets[d.id]??{x:ORIGINAL_OFFSET_X,y:0};return {...d,x:d.x+offset.x,y:d.y+offset.y,patrolPoints:d.patrolPoints?.map(p=>({x:p.x+offset.x,y:p.y+offset.y}))}});
