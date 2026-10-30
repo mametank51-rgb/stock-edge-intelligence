@@ -1,8 +1,7 @@
-import {BLOCKS,segments} from '../world/collision';import {ATTACKS,MONSTERS,attackType,isSafe} from './model';import type {CombatEvent,Fighter,MonsterDefinition,MonsterState} from './model';
+import {WORLD_BLOCKS} from '../world/collision';import {ATTACKS,MONSTERS,attackType,isSafe} from './model';import type {CombatEvent,Fighter,MonsterDefinition,MonsterState} from './model';
 import {ItemEngine,derivedStats,equipmentAttack} from '../items/ItemEngine';
 const MAX_HP=100,MAX_MP=65,RESPAWN_MS=5000;
-const obstacles=segments.flatMap(([dx,dy,sx,width])=>BLOCKS.flatMap(([x,y,w,h])=>{const l=Math.max(x,sx),r=Math.min(x+w,sx+width);return r>l?[[dx+l-sx,dy+y,r-l,h] as const]:[]}));
-function blocked(x:number,y:number){return x<12||x>2738||y<12||y>1694||obstacles.some(([a,b,w,h])=>x+6>a&&x-6<a+w&&y+6>b&&y-6<b+h)}
+function blocked(x:number,y:number){return x<12||x>2738||y<12||y>1694||WORLD_BLOCKS.some(([a,b,w,h])=>x+6>a&&x-6<a+w&&y+6>b&&y-6<b+h)}
 interface Internal {state:MonsterState;def:MonsterDefinition;nextAction:number;lastAttack:number;wanderX:number;wanderY:number}
 export class CombatEngine {
  private monsters=new Map<string,Internal>();readonly fighters=new Map<string,Fighter>();private disconnected=new Map<string,Fighter>();
