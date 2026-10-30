@@ -1,0 +1,5 @@
+const assert=require('node:assert/strict');const Module=require('node:module');const esbuild=require('esbuild');
+function load(path){const code=esbuild.buildSync({entryPoints:[path],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text;const m=new Module(path,module);m.filename=__filename;m.paths=module.paths;m._compile(code,__filename);return m.exports}
+const {interpolate}=load('src/game/network/interpolation.ts');const {parseMessage,isDirection}=load('src/game/network/protocol.ts');
+const a={time:100,move:{x:0,y:20,direction:'down',movementState:'idle'}},b={time:200,move:{x:100,y:40,direction:'right',movementState:'run'}};
+assert.deepEqual(interpolate(a,b,150),{x:50,y:30,direction:'down',movementState:'idle'});assert.equal(interpolate(a,b,250).direction,'right');assert.equal(interpolate(a,undefined,150).x,0);assert.equal(parseMessage('{'),null);assert.deepEqual(parseMessage('{"type":"PING"}'),{type:'PING'});assert.equal(isDirection('diagonal'),false);console.log('PASS: interpolation and protocol parsing');

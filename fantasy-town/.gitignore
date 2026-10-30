@@ -1,0 +1,8 @@
+node_modules/
+dist/
+preview.png
+.env
+.env.local
+.dev.vars
+worker/.wrangler/
+worker/dist/

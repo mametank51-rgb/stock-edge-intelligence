@@ -1,0 +1,31 @@
+{
+  "name": "ashenvale",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "worker:dev": "wrangler dev --config worker/wrangler.toml --local --port 8787",
+    "worker:check": "tsc -p worker/tsconfig.json --noEmit",
+    "worker:build": "wrangler deploy --config worker/wrangler.toml --dry-run --outdir worker/dist",
+    "test:network": "node tests/interpolation.cjs && node tests/network-state.cjs && node tests/network.cjs",
+    "test:combat": "node tests/combat.cjs",
+    "test:items": "node tests/items.cjs",
+    "worker:smoke": "node tests/check-local-worker.cjs",
+    "worker:two": "node tests/check-two-players.cjs",
+    "worker:death": "node tests/check-death-reconnect.cjs"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261029.1",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "wrangler": "^4.155.0",
+    "ws": "^8.21.0"
+  }
+}
