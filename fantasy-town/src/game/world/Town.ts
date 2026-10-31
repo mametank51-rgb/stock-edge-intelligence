@@ -4,11 +4,13 @@ import Phaser from 'phaser';
 export const WORLD_WIDTH=2750, WORLD_HEIGHT=1706;
 export {ORIGINAL_OFFSET_X} from './collision';
 import {WORLD_BLOCKS} from './collision';
+import {buildCentralSquare} from './CentralSquare';
 export class Town {
  readonly obstacles:Phaser.Physics.Arcade.StaticGroup;
  constructor(scene:Phaser.Scene){
   this.obstacles=scene.physics.add.staticGroup();
   scene.add.image(0,0,'town-expanded').setOrigin(0).setDepth(-1000);
+  buildCentralSquare(scene);
   // Each extension uses a crop of the supplied image. Transform and clip its
   // collision rectangles by the same amount so paths remain consistent.
   for(const [x,y,w,h] of WORLD_BLOCKS){
