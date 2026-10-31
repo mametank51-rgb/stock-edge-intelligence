@@ -23,10 +23,22 @@ export function buildCentralSquare(scene:Phaser.Scene){
   ctx.fillStyle=fade;ctx.fillRect(-1,-1,2,2);ctx.restore();ctx.globalCompositeOperation='source-over';texture.refresh();
  }
  const floor=scene.add.image(x,y,'central-square-floor').setOrigin(0).setDepth(-999);
+ // Conceal the old flattened fountain beneath a separate paving layer. The
+ // original obstacle remains in WORLD_BLOCKS until the area is fully rebuilt.
+ const fountainX=1549,fountainY=369,foundationSize=160;
+ if(!scene.textures.exists('central-fountain-foundation')){
+  const base=scene.textures.createCanvas('central-fountain-foundation',foundationSize,foundationSize);
+  if(!base)throw new Error('Could not create fountain foundation');
+  const ctx=base.getContext(),source=scene.textures.get('square-stone-art').getSourceImage() as HTMLImageElement;
+  ctx.imageSmoothingEnabled=false;ctx.filter='brightness(1.25) saturate(0.65)';ctx.drawImage(source,0,0,source.width,source.height,0,0,foundationSize,foundationSize);ctx.filter='none';
+  ctx.globalCompositeOperation='destination-in';const fade=ctx.createRadialGradient(80,80,55,80,80,80);fade.addColorStop(0,'rgba(255,255,255,1)');fade.addColorStop(1,'rgba(255,255,255,0)');ctx.fillStyle=fade;ctx.fillRect(0,0,foundationSize,foundationSize);ctx.globalCompositeOperation='source-over';base.refresh();
+ }
+ const foundation=scene.add.image(fountainX,fountainY,'central-fountain-foundation').setDepth(-999);
+ const fountain=scene.add.image(fountainX,fountainY,'square-fountain-art').setDisplaySize(142,142).setDepth(fountainY+71);
  // A flush stone inlay is decorative ground: it never blocks movement.
  const decoration=scene.add.graphics().setDepth(-998);
  const cx=x+width/2,cy=y+height/2;
  decoration.fillStyle(0xa49b7d,.45).fillRect(cx-1,cy-5,2,10).fillRect(cx-5,cy-1,10,2);
  decoration.fillStyle(0x4b5045,.55).fillRect(cx-1,cy-1,2,2);
- return {floor,decoration};
+ return {floor,decoration,foundation,fountain};
 }
