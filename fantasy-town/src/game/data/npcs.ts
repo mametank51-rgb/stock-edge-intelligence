@@ -6,7 +6,7 @@ export const npcDefinitions:NpcDefinition[]=[
  npc('guard_south','ブラム','衛兵',830,680,'Dwarf','Warrior',2,'PATROL','南の道は穏やかだが、油断は禁物だ。',{patrolPoints:[{x:830,y:680},{x:830,y:760}]}),
  npc('smith','ドラン','鍛冶屋',880,695,'Dwarf','Craftsman',2,'STATIC','北の鉱山から、良い鉄が届くといいんだがな。',{art:'blacksmith'}),
  npc('innkeeper','マレナ','宿屋主人',566,250,'Human','Merchant',1,'STATIC','旅の疲れは、温かい食事で癒やすのが一番よ。'),
- npc('merchant','セラ','商人',944,405,'Elf','Merchant',1,'STATIC','今日は森の向こうから布が届いたの。'),
+ npc('merchant','セラ','商人',944,405,'Elf','Merchant',1,'STATIC','今日は森の向こうから布が届いたの。',{art:'merchant'}),
  npc('trader','オズ','行商人',1020,415,'Human','Merchant',3,'STATIC','市が立つ日は、いろんな話が集まるんだ。'),
  npc('traveler','フィン','旅人',620,465,'Elf','Archer',0,'WANDER','森の奥で妙な光を見たよ。',{wanderRadius:35}),
  npc('villager','エダ','村人',703,500,'Human','Merchant',3,'WANDER','噴水の音を聞くと、なんだか落ち着くわ。',{wanderRadius:30,art:'townswoman'}),
