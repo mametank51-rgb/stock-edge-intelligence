@@ -9,7 +9,7 @@ export const npcDefinitions:NpcDefinition[]=[
  npc('merchant','セラ','商人',944,405,'Elf','Merchant',1,'STATIC','今日は森の向こうから布が届いたの。'),
  npc('trader','オズ','行商人',1020,415,'Human','Merchant',3,'STATIC','市が立つ日は、いろんな話が集まるんだ。'),
  npc('traveler','フィン','旅人',620,465,'Elf','Archer',0,'WANDER','森の奥で妙な光を見たよ。',{wanderRadius:35}),
- npc('villager','エダ','村人',703,500,'Human','Merchant',3,'WANDER','噴水の音を聞くと、なんだか落ち着くわ。',{wanderRadius:30}),
+ npc('villager','エダ','村人',703,500,'Human','Merchant',3,'WANDER','噴水の音を聞くと、なんだか落ち着くわ。',{wanderRadius:30,art:'townswoman'}),
  npc('farmer','ハル','農民',560,690,'Human','Craftsman',0,'WANDER','今年は雨がちょうど良かったよ。',{wanderRadius:25}),
  npc('priest','エリス','僧侶',891,260,'Elf','Priest',1,'STATIC','旅の道に、静かな光がありますように。'),
  npc('fisher','コル','漁師',365,580,'Human','Archer',2,'STATIC','川が澄んでいる日は、魚の影が見えるんだ。'),
