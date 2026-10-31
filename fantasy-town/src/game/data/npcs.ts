@@ -12,7 +12,7 @@ export const npcDefinitions:NpcDefinition[]=[
  npc('villager','エダ','村人',703,500,'Human','Merchant',3,'WANDER','噴水の音を聞くと、なんだか落ち着くわ。',{wanderRadius:30,art:'townswoman'}),
  npc('farmer','ハル','農民',560,690,'Human','Craftsman',0,'WANDER','今年は雨がちょうど良かったよ。',{wanderRadius:25}),
  npc('priest','エリス','僧侶',891,260,'Elf','Priest',1,'STATIC','旅の道に、静かな光がありますように。',{art:'priest'}),
- npc('fisher','コル','漁師',365,580,'Human','Archer',2,'STATIC','川が澄んでいる日は、魚の影が見えるんだ。'),
+ npc('fisher','コル','漁師',365,580,'Human','Archer',2,'STATIC','川が澄んでいる日は、魚の影が見えるんだ。',{art:'fisher'}),
  npc('craftsman','トマ','職人',865,585,'Dwarf','Craftsman',0,'WANDER','良い道具は、手入れをすれば長持ちする。',{wanderRadius:25}),
  npc('elder','オルナ','長老',404,300,'Human','Priest',3,'STATIC','この町の木々は、昔から旅人を見守っている。'),
  npc('child','ミア','子ども',610,390,'Human','Rogue',1,'WANDER','橋の向こうまで競争しよう！',{wanderRadius:25}),
