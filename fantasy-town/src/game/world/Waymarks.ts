@@ -14,11 +14,12 @@ export function roadWaymark(route:{x:number;y:number}[]) {
  return best;
 }
 
+const gateCache=new Map<string,{x:number;y:number}>();
+export function townGate(id:string){const cached=gateCache.get(id);if(cached)return cached;const d=destinations.find(x=>x.id===id);const point=d?roadWaymark(findRoute(1415,480,d.x,d.y)):undefined;if(point)gateCache.set(id,point);return point}
 /** Mark the walkable exit from the town centre and the destination on the same map. */
 export function addWaymarks(scene:Phaser.Scene) {
  for(const destination of destinations){
-  const route=findRoute(1415,480,destination.x,destination.y);
-  const gate=roadWaymark(route);
+  const gate=townGate(destination.id);
   for(const [point,label] of [[gate,`${destination.name}へ`],[destination,destination.name]] as const){
    if(!point)continue;
    const ring=scene.add.ellipse(point.x,point.y+3,54,20,0xd0b477,.16).setStrokeStyle(1,0xe8cd8b,.85).setDepth(point.y-.3);
