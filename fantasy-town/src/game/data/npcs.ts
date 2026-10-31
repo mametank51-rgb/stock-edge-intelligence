@@ -2,7 +2,7 @@ import {appearancePresets} from '../characters/definitions';import type {NpcDefi
 import {ORIGINAL_OFFSET_X} from '../world/collision';
 function npc(id:string,name:string,role:string,x:number,y:number,race:Race,profession:Profession,preset:number,movementType:MovementType,line:string,extra:Partial<NpcDefinition>={}):NpcDefinition{return {id,name,role,x,y,race,profession,appearance:{...appearancePresets[preset%appearancePresets.length]},movementType,dialogueSet:[line],interactionRadius:90,...extra}}
 export const npcDefinitions:NpcDefinition[]=[
- npc('guard_north','ロウェン','衛兵',740,265,'Human','Warrior',0,'PATROL','町の外へ行くなら、支度をしておけ。',{patrolPoints:[{x:740,y:265},{x:835,y:265}]}),
+ npc('guard_north','ロウェン','衛兵',740,265,'Human','Warrior',0,'PATROL','町の外へ行くなら、支度をしておけ。',{patrolPoints:[{x:740,y:265},{x:835,y:265}],art:'guard'}),
  npc('guard_south','ブラム','衛兵',830,680,'Dwarf','Warrior',2,'PATROL','南の道は穏やかだが、油断は禁物だ。',{patrolPoints:[{x:830,y:680},{x:830,y:760}]}),
  npc('smith','ドラン','鍛冶屋',880,695,'Dwarf','Craftsman',2,'STATIC','北の鉱山から、良い鉄が届くといいんだがな。'),
  npc('innkeeper','マレナ','宿屋主人',566,250,'Human','Merchant',1,'STATIC','旅の疲れは、温かい食事で癒やすのが一番よ。'),
