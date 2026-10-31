@@ -18,3 +18,5 @@ const npcModule=new Module('npc-data',module);npcModule._compile(esbuild.buildSy
 for(const npc of npcModule.exports.townNpcs){assert.equal(blocked(npc.x,npc.y),false,`${npc.id} starts inside an obstacle`);let reachable=false;for(const cell of seen){const [x,y]=cell.split(',').map(Number);if(Math.hypot(x*step+5-npc.x,y*step+5-npc.y)<npc.interactionRadius-10){reachable=true;break}}assert.ok(reachable,`${npc.id} cannot be approached`)}
 console.log(`PASS: all ${npcModule.exports.townNpcs.length} NPCs can be approached from town`);
 console.log('PASS: river, bridge, bank and routes to town districts');
+
+const routeModule=new Module('route-guide',module);routeModule._compile(esbuild.buildSync({entryPoints:['src/game/world/routes.ts'],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text,__filename);for(const d of routeModule.exports.destinations){const route=routeModule.exports.findRoute(1415,480,d.x,d.y);assert.ok(route.length>1,d.name+' route missing');for(const p of route.slice(1))assert.equal(blocked(p.x,p.y),false,d.name+' route crosses obstacle')}console.log('PASS: all three guided routes reach walkable destinations');
