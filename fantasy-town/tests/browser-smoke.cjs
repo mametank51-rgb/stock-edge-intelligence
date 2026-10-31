@@ -61,9 +61,9 @@ async function main(){
   await touch.screenshot({path:path.join(__dirname,'../evidence/mobile-portrait.png')});
   await touch.locator('.item-close').tap();await touch.setViewportSize({width:844,height:390});await touch.waitForTimeout(300);await touch.screenshot({path:path.join(__dirname,'../evidence/mobile-landscape.png')});
   console.log('PASS: touch controls, portrait equipment layout and landscape resize');
-  const recovery=await browser.newContext();const failure=await recovery.newPage();await failure.route('**/assets/characters/guard.png',route=>route.abort());
+  const recovery=await browser.newContext();const failure=await recovery.newPage();failure.on('pageerror',e=>errors.push(e.message));await failure.route('**/assets/characters/guard.png',route=>route.abort());
   await failure.goto(url);await failure.locator('.loading-screen[role="alert"]').waitFor();assert.match(await failure.locator('.loading-screen').innerText(),/読み込めません/);
-  await failure.unroute('**/assets/characters/guard.png');await failure.locator('.loading-screen button').click();await failure.waitForFunction(()=>!document.querySelector('.loading-screen'));await recovery.close();
+  await failure.waitForTimeout(350);await failure.unroute('**/assets/characters/guard.png');await failure.locator('.loading-screen button').click();await failure.waitForFunction(()=>!document.querySelector('.loading-screen'));await recovery.close();
   console.log('PASS: offline backup export/import, invalid import refusal, asset failure and reload recovery');
   assert.deepEqual(errors,[],'No browser runtime errors');
  }finally{await browser.close()}
