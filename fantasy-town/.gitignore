@@ -6,3 +6,6 @@ preview.png
 .dev.vars
 worker/.wrangler/
 worker/dist/
+evidence/
+.local-config/
+.wrangler/

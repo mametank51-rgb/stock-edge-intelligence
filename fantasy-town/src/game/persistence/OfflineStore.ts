@@ -11,5 +11,20 @@ export class OfflineStore {
  private key:string;private saved:OfflineSave|null=null;private invalid=false;
  constructor(private playerId:string){this.key=PREFIX+playerId;try{const raw=localStorage.getItem(this.key);if(raw){this.saved=parseOfflineSave(raw,playerId,Date.now());if(!this.saved){this.invalid=true;console.warn('Offline save is invalid or unsupported; it will not be overwritten.')}}}catch(error){this.invalid=true;console.warn('Offline save could not be read.',error)}}
  load(){return this.saved}
+ exportBackup(){return this.saved?JSON.stringify(this.saved,null,2):null}
+ importBackup(raw:string){
+  const restored=parseOfflineBackup(raw,this.playerId,Date.now());
+  if(!restored)return false;
+  try{localStorage.setItem(this.key,JSON.stringify(restored));this.saved=restored;this.invalid=false;return true}
+  catch(error){console.warn('Offline backup could not be restored.',error);return false}
+ }
  save(items:ItemPlayer,skills:SkillLevels,ground:GroundItem[]){const value:OfflineSave={version:1,playerId:this.playerId,items,skills,ground};try{if(this.invalid)throw new Error('Existing save cannot be read');localStorage.setItem(this.key,JSON.stringify(value));this.saved=value;return true}catch(error){console.warn('Offline save could not be written.',error);window.dispatchEvent(new CustomEvent('town-save-error',{detail:'端末に保存できませんでした。既存データを確認してください。'}));return false}}
+}
+/** A backup may come from another browser; its items remain offline-only. */
+export function parseOfflineBackup(raw:string,playerId:string,now:number):OfflineSave|null {
+ if(raw.length>1024*1024)return null;
+ let value:unknown;try{value=JSON.parse(raw)}catch{return null}
+ if(!record(value)||typeof value.playerId!=='string'||!/^[\w-]{8,64}$/.test(value.playerId))return null;
+ const save=parseOfflineSave(raw,value.playerId,now);
+ return save?{...save,playerId}:null;
 }

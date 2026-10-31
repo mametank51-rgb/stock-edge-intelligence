@@ -36,6 +36,8 @@ jobs:
           VITE_WS_URL: ${{ vars.FANTASY_TOWN_WS_URL }}
         run: |
           npm ci
+          npm test
+          npm run worker:check
           npm run build
           mkdir -p ../public/fantasy-town
           cp -R dist/. ../public/fantasy-town/

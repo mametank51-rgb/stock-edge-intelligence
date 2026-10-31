@@ -15,7 +15,11 @@
     "test:items": "node tests/items.cjs",
     "worker:smoke": "node tests/check-local-worker.cjs",
     "worker:two": "node tests/check-two-players.cjs",
-    "worker:death": "node tests/check-death-reconnect.cjs"
+    "worker:death": "node tests/check-death-reconnect.cjs",
+    "test": "node scripts/test.cjs",
+    "test:browser": "node tests/browser-smoke.cjs",
+    "test:art": "node tests/character-art.cjs",
+    "art:pack": "node scripts/pack-character-art.cjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

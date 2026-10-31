@@ -1,0 +1,13 @@
+{
+  "adventurer": {"source":"adventurer-sfc-v1.png"},
+  "mage": {"source":"mage-sfc-v1.png","columns":[32,296,560,825],"width":286},
+  "archer": {"source":"archer-sfc-v1.png","columns":[27,304,570,843],"width":270},
+  "townswoman": {"source":"townswoman-v1.png","columns":[124,372,620,868],"rows":[0,294,588,882],"width":248,"height":300},
+  "guard": {"source":"guard-v1.png"},
+  "blacksmith": {"source":"blacksmith-v1.png"},
+  "merchant": {"source":"merchant-v1.png","columns":[82,363,644,925],"rows":[0,295,590,885],"width":281,"height":295},
+  "innkeeper": {"source":"innkeeper-v1.png","columns":[95,394,658,937],"rows":[0,294,588,882],"width":280,"height":294},
+  "traveler": {"source":"traveler-v1.png","columns":[53,347,641,935],"rows":[0,300,600,900],"width":294,"height":300},
+  "priest": {"source":"priest-v1.png"},
+  "fisher": {"source":"fisher-v1.png","columns":[54,332,622,908],"rows":[0,302,612,918],"width":280,"height":305}
+}
