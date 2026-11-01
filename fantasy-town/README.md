@@ -4,7 +4,7 @@
 
 公開ゲーム： https://mametank51-rgb.github.io/stock-edge-intelligence/fantasy-town/
 
-**公開版は現在 Offline モードです。** ローカルの Cloudflare Worker では複数人の同期を確認済みですが、公開 Worker と接続先の設定は未完了です。2026-11-01 の確認で Wrangler は未ログインでした。アカウント認証や本番の経済・保存基盤が完成したMMORPGではありません。
+公開版はCloudflare Workerへ接続します。接続できない場合はOffline表示になり、端末内で遊べます。アカウント認証や本番の経済・保存基盤が完成したMMORPGではありません。
 
 ## 起動・検証
 
@@ -75,7 +75,7 @@ Worker がアイテム取得競合、装備、ドロップ、戦闘距離、ク�
 
 ## これからオンラインで遊ぶには
 
-公開版は接続先未設定のため Offline です。2人の同期機能は、同一PC上の2つの独立したブラウザとローカルWorkerで確認しました。インターネットで一緒に遊ぶには Cloudflare アカウントを作成し、Wranglerへのログイン・Worker公開・GitHub Actions変数設定が必要です。アカウント作成やログイン情報の入力は本人が行い、パスワードや認証コードをチャットに送らないでください。
+公開版は `wss://ashenvale-room.mametank51.workers.dev` に接続します。公開Workerには隔離したテスト用ルームを作成し、２接続で入退室・移動・チャットを確認しています。変更する場合、GitHub Actions変数 `FANTASY_TOWN_WS_URL` で公開URLを上書きできます。
 
 接続状態に応じて表示が Online / Connecting / Reconnecting / Offline に変わります。オンラインのアイテム・経験・掲示板はサーバーのメモリ上のみで、再起動すると失われます。アカウント認証は未実装のため、知人同士の動作確認向けです。無料枠での利用可否や上限は Cloudflare の料金・制限を確認してください。
 
@@ -92,7 +92,7 @@ npx wrangler login
 npx wrangler deploy --config worker/wrangler.toml
 ```
 
-取得した Worker のURLを `wss://` にした値を、GitHubリポジトリの Actions 変数 `FANTASY_TOWN_WS_URL` に設定して Pages を再デプロイします。ワークフローが `VITE_WS_URL` としてビルドへ渡します。直接ビルドする場合は `VITE_WS_URL` を設定してください。フロントエンドへ秘密鍵・APIトークンを入れません。
+別の Worker を使用する場合、取得したURLを `wss://` にした値を GitHubリポジトリの Actions 変数 `FANTASY_TOWN_WS_URL` に設定して Pages を再デプロイします。ワークフローが `VITE_WS_URL` としてビルドへ渡します。直接ビルドする場合は `VITE_WS_URL` を設定してください。フロントエンドへ秘密鍵・APIトークンを入れません。
 
 ## 描画と素材
 

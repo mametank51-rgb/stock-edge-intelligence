@@ -33,7 +33,7 @@ jobs:
       - name: Build fantasy town
         working-directory: fantasy-town
         env:
-          VITE_WS_URL: ${{ vars.FANTASY_TOWN_WS_URL }}
+          VITE_WS_URL: ${{ vars.FANTASY_TOWN_WS_URL || 'wss://ashenvale-room.mametank51.workers.dev' }}
         run: |
           npm ci
           npm test
