@@ -14,3 +14,6 @@ const pending=[...timeouts.entries()][0];timeouts.delete(pending[0]);pending[1](
 const second=Socket.instances.at(-1);second.open();assert.deepEqual(second.sent[0].player,{id:live.id,name:'Returned',x:45,y:67,direction:'down',movementState:'idle',race:'Human',profession:'Warrior',appearance:{primaryColor:456},timestamp:second.sent[0].player.timestamp});
 second.message({type:'PLAYER_SNAPSHOT',players:[]});assert.equal(reconnect.state,'CONNECTED');reconnect.destroy();assert.equal(timeouts.size,0);assert.equal(intervals.size,0);
 console.log('PASS: reconnect restores current position, name and appearance');
+
+// The socket can remain CONNECTING forever without firing open or close.
+const stalled=new m.exports.NetworkManager('ws://localhost:8787',p,()=>{},()=>{});stalled.connect();const stalledSocket=Socket.instances.at(-1);assert.equal(stalledSocket.readyState,0);const firstDeadline=[...timeouts.entries()][0];timeouts.delete(firstDeadline[0]);firstDeadline[1]();assert.equal(stalledSocket.readyState,3);assert.equal(stalled.state,'RECONNECTING');assert.equal(timeouts.size,1);stalled.destroy();assert.equal(timeouts.size,0);console.log('PASS: stalled initial handshake times out and retries');
