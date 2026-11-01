@@ -2,6 +2,7 @@
 const assert=require('node:assert/strict');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const url=process.env.GAME_URL||'http://127.0.0.1:5179';
+async function waitForMessage(messages,predicate){const end=Date.now()+5000;while(Date.now()<end){if(messages.some(predicate))return;await new Promise(resolve=>setTimeout(resolve,50))}assert.fail('Expected message was not received')}
 async function main(){
  const browser=await chromium.launch({channel:'chrome',headless:true});
  const errors=[],messages=[[],[]];
@@ -24,6 +25,18 @@ async function main(){
   const chat=pages[0].locator('.chat-form input');await chat.fill('町で会いましょう');await chat.press('Enter');
   await pages[1].waitForFunction(()=>document.querySelector('.chat-log')?.textContent.includes('町で会いましょう'));
   assert.equal(await chat.inputValue(),'');
+  const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  await mobile.addInitScript(()=>{window.addEventListener('town-position',e=>window.__pos=e.detail);window.addEventListener('town-combat-ui',e=>window.__hp=e.detail.hp)});
+  const phone=await mobile.newPage();phone.on('pageerror',error=>errors.push(error.message));
+  await phone.goto(url);await phone.waitForFunction(()=>document.querySelector('.network-status')?.textContent==='Online');
+  await phone.getByRole('button',{name:'西の森'}).tap();await phone.getByRole('button',{name:'案内に沿って歩く'}).tap();
+  await phone.waitForFunction(()=>window.__pos&&Math.hypot(window.__pos.x-815,window.__pos.y-580)<20,null,{timeout:30000});
+  await waitForMessage(messages[0],m=>m.type==='PLAYER_MOVE'&&Math.hypot(m.move.x-815,m.move.y-580)<20);
+  await phone.waitForTimeout(5000);assert.equal(await phone.evaluate(()=>window.__hp),100,'Forest arrival should not deal immediate damage');
+  await phone.getByRole('button',{name:'町へ戻る'}).tap();
+  await phone.waitForFunction(()=>window.__pos&&Math.hypot(window.__pos.x-1415,window.__pos.y-480)<20,null,{timeout:10000});
+  await waitForMessage(messages[0],m=>m.type==='PLAYER_MOVE'&&m.move.x===1415&&m.move.y===480);
+  await mobile.close();console.log('PASS: online mobile forest travel and return are visible to another player');
   await pages[1].bringToFront();await pages[1].evaluate(()=>window.__sockets.find(s=>s.url.includes(':8787')).close());
   await pages[1].waitForFunction(()=>window.__states.includes('RECONNECTING')&&window.__states.filter(x=>x==='CONNECTED').length>=2,null,{polling:100,timeout:15000});
   assert.ok(messages[1].filter(m=>m.type==='PLAYER_SNAPSHOT').length>=2);
@@ -32,3 +45,4 @@ async function main(){
  }finally{await browser.close()}
 }
 main().catch(error=>{console.error(error);process.exitCode=1});
+
