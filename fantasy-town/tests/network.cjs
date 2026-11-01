@@ -9,7 +9,7 @@ const mod=new Module('worker-test',module);mod.filename=__filename;mod.paths=mod
 let currentSocket;
 global.WebSocketPair=class {constructor(){const ws=currentSocket;this[0]={};this[1]={accept(){},send(data){ws.send(data)},close(code,reason){ws.close(code,reason)},addEventListener(type,callback){if(type==='message')ws.on('message',data=>callback({data:data.toString()}));else ws.on(type,callback)}}}};
 const NativeResponse=global.Response;global.Response=class extends NativeResponse{constructor(body,options){if(options?.status===101)return {status:101,webSocket:options.webSocket};super(body,options)}};
-const room=new mod.exports.TownRoom({},{});const wss=new WebSocketServer({port:0,host:'127.0.0.1'});
+const room=new mod.exports.TownRoom({},{},{load(){return null},save(){}});const wss=new WebSocketServer({port:0,host:'127.0.0.1'});
 const next=(ws,type,predicate=()=>true)=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error(`Timed out: ${type}`)),3000);const listener=data=>{const m=JSON.parse(data.toString());if(m.type===type&&predicate(m)){clearTimeout(timeout);ws.off('message',listener);resolve(m)}};ws.on('message',listener)});
 const opened=ws=>new Promise((resolve,reject)=>{ws.once('open',resolve);ws.once('error',reject)});
 const player=(id,x)=>({id,name:id,x,y:495,direction:'down',movementState:'idle',race:'Human',profession:'Warrior',appearance:{bodyType:'standard',skinVariant:13214078,hairStyle:'short',hairColor:4937773,clothesVariant:0,primaryColor:5860192,secondaryColor:9993303},timestamp:0});

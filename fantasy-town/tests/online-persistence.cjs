@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),Module=require('node:module'),esbuild=require('esbuild');
+function load(path){const m=new Module(path,module);m.filename=__filename;m.paths=module.paths;m._compile(esbuild.buildSync({entryPoints:[path],bundle:true,platform:'node',format:'cjs',write:false}).outputFiles[0].text,__filename);return m.exports}
+const {TownRoom}=load('worker/src/index.ts'),{decodeRoom}=load('worker/src/RoomPersistence.ts');
+let raw=null;const store={load(){return raw?decodeRoom(raw,Date.now()):null},save(value){raw=JSON.stringify(value)}};
+const profile={id:'player-a',name:'旅人',x:1555,y:510,direction:'left',movementState:'walk',race:'Elf',profession:'Mage',appearance:{bodyType:'standard',skinVariant:13214078,hairStyle:'short',hairColor:4937773,clothesVariant:0,primaryColor:5860192,secondaryColor:9993303},timestamp:Date.now()};
+const room=new TownRoom({}, {}, store),a=room.items.join('player-a'),b=room.items.join('player-b');room.profiles.set('player-a',profile);
+const sword=a.inventory.items.find(x=>x.definitionId==='sword');assert.ok(room.items.action('player-a',{action:'EQUIP',id:sword.instanceId},0,0,Date.now(),()=>false));
+room.crafting.restoreSkills('player-a',{mining:12,smithing:7});assert.ok(room.items.grant('player-b','coin',5));
+const shield=a.inventory.items.find(x=>x.definitionId==='wood_shield');assert.ok(room.market.list('player-a','旅人',shield.instanceId,5,Date.now()));
+const bow=a.inventory.items.find(x=>x.definitionId==='bow');assert.ok(room.items.action('player-a',{action:'DROP',id:bow.instanceId},1400,480,Date.now(),()=>false));room.persist();
+const restored=new TownRoom({}, {}, store);assert.equal(restored.items.get('player-a').equipment.mainHand.instanceId,sword.instanceId);assert.equal(restored.crafting.getSkills('player-a').mining,12);assert.equal(restored.profiles.get('player-a').name,'旅人');assert.equal(restored.profiles.get('player-a').x,1555);assert.ok(restored.items.ground.has(bow.instanceId));assert.equal(restored.market.snapshot()[0].item.instanceId,shield.instanceId);assert.ok(!restored.items.get('player-a').inventory.items.some(i=>i.instanceId===shield.instanceId));
+assert.ok(restored.market.buy('player-b',shield.instanceId));restored.persist();const after=new TownRoom({}, {}, store);assert.equal(after.market.snapshot().length,0);assert.ok(after.items.get('player-b').inventory.items.some(i=>i.instanceId===shield.instanceId));assert.equal(after.items.get('player-a').inventory.items.find(i=>i.definitionId==='coin').quantity,5);
+const corrupt=JSON.parse(raw);corrupt.players[0].items.inventory.items.push({...corrupt.players[0].items.equipment.mainHand});assert.throws(()=>decodeRoom(JSON.stringify(corrupt),Date.now()));assert.throws(()=>decodeRoom('{"version":2}',Date.now()));
+const fail=new TownRoom({}, {}, {load(){return null},save(){throw Error('disk failed')}});assert.throws(()=>fail.persist(),/disk failed/);assert.equal(fail.storageFailed,true);assert.equal(fail.fetch({headers:new Headers({Upgrade:'websocket'})}).status,503);
+console.log('PASS: room restart, equipment, profile, skills, ground, escrow, purchase, corrupt-save refusal and write failure');

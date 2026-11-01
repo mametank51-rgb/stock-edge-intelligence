@@ -1,5 +1,5 @@
 const {spawnSync}=require('node:child_process');
-const tests=['interpolation','network-state','network','combat','items','crafting','market','persistence','world-routes','player-experience'];
+const tests=['interpolation','network-state','network','combat','items','crafting','market','persistence','online-persistence','world-routes','player-experience'];
 let failed=false;
 for(const name of tests){
  const result=spawnSync(process.execPath,['tests/'+name+'.cjs'],{stdio:'inherit'});
