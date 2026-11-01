@@ -1,17 +1,12 @@
 import type Phaser from 'phaser';
 import {destinations,findRoute} from './routes';
 import {isSafe} from '../combat/model';
-import {WORLD_BLOCKS} from './collision';
 
-// Choose a point on the verified path with room on both sides, rather than
-// treating the invisible safe-zone boundary as the centre of the road.
+// Place the marker after leaving town, far enough apart that the wide
+// activation areas do not overlap routes to another destination.
 export function roadWaymark(route:{x:number;y:number}[]) {
  const crossing=route.findIndex(point=>!isSafe(point.x,point.y));
- if(crossing<0)return undefined;
- const clearance=(p:{x:number;y:number})=>Math.min(...WORLD_BLOCKS.map(([x,y,w,h])=>Math.hypot(Math.max(x-p.x,0,p.x-x-w),Math.max(y-p.y,0,p.y-y-h))));
- let best=route[crossing],score=clearance(best);
- for(const p of route.slice(Math.max(0,crossing-8),crossing+9)){const value=clearance(p);if(value>score){best=p;score=value}}
- return best;
+ return crossing<0?undefined:route[Math.min(route.length-1,crossing+2)];
 }
 
 const gateCache=new Map<string,{x:number;y:number}>();
