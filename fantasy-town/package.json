@@ -19,7 +19,8 @@
     "test": "node scripts/test.cjs",
     "test:browser": "node tests/browser-smoke.cjs",
     "test:art": "node tests/character-art.cjs",
-    "art:pack": "node scripts/pack-character-art.cjs"
+    "art:pack": "node scripts/pack-character-art.cjs",
+    "test:browser:online": "node tests/browser-online.cjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
