@@ -6,11 +6,12 @@ export {ORIGINAL_OFFSET_X} from './collision';
 import {WORLD_BLOCKS} from './collision';
 import {buildCentralSquare} from './CentralSquare';
 import {addWaymarks} from './Waymarks';
+import {MAP_TILES} from './MapTiles';
 export class Town {
  readonly obstacles:Phaser.Physics.Arcade.StaticGroup;
  constructor(scene:Phaser.Scene){
   this.obstacles=scene.physics.add.staticGroup();
-  scene.add.image(0,0,'town-expanded').setOrigin(0).setDepth(-1000);
+  for(const tile of MAP_TILES)scene.add.image(tile.x,tile.y,tile.key).setOrigin(0).setDepth(-1000);
   buildCentralSquare(scene);
   addWaymarks(scene);
   // Each extension uses a crop of the supplied image. Transform and clip its

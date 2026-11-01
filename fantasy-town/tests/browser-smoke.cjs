@@ -46,6 +46,7 @@ async function main(){
   await page.locator('[data-window="スキル"]').click();assert.match(await page.locator('.skill-list').innerText(),/9 回/);await page.keyboard.press('Escape');
   await page.keyboard.press('c');await page.locator('.appearance-open').click();assert.equal(await page.locator('[name="profession"]').inputValue(),'Mage','Profile persists across reload');await page.keyboard.press('Escape');
   await page.keyboard.press('e');await page.locator('.dialogue:not([hidden])').waitFor();await page.keyboard.press('Escape');await page.locator('.dialogue[hidden]').waitFor({state:'attached',timeout:2000});
+  const tiles=await page.evaluate(()=>performance.getEntriesByType('resource').filter(x=>/\/assets\/town-[0-2]-[01]\.jpg/.test(x.name)).length);assert.equal(tiles,6,'All map tiles load');
   const requests=await page.evaluate(()=>performance.getEntriesByType('resource').filter(x=>x.name.includes('/assets/characters/')).map(x=>x.name));assert.equal(requests.length,11,'All packed character sheets load');
   fs.mkdirSync(path.join(__dirname,'../evidence'),{recursive:true});
   await page.screenshot({path:path.join(__dirname,'../evidence/desktop.png')});
