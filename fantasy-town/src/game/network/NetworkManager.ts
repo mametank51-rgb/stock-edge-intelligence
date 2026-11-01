@@ -20,6 +20,7 @@ export class NetworkManager {
  update(now:number){if(this.state!=='CONNECTED'||now-this.lastSent<SEND_INTERVAL)return;this.lastSent=now;const p=this.player;const move={x:Math.round(p.x*10)/10,y:Math.round(p.y*10)/10,direction:p.direction,movementState:p.movementState};const serialized=JSON.stringify(move);if(serialized!==this.lastMove&&this.send({type:'PLAYER_MOVE',move}))this.lastMove=serialized}
  profile(){const p=this.player;this.send({type:'PROFILE',name:p.name,race:p.race,profession:p.profession,appearance:p.appearance})}
  chat(text:string){const message=text.trim();if(!message||message.length>MAX_CHAT||Date.now()-this.lastChat<1000)return false;if(!this.send({type:'CHAT',message}))return false;this.lastChat=Date.now();return true}
+ returnTown(){return this.send({type:'TOWN_RETURN'})}
  travel(id:string){return this.send({type:'WAYMARK_TRAVEL',id})}
  attack(targetId:string){return this.send({type:'ATTACK_REQUEST',targetId})}
  itemAction(itemAction:ItemAction){return this.send({type:'ITEM_ACTION',itemAction})}

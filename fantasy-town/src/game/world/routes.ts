@@ -1,6 +1,6 @@
 import {WORLD_BLOCKS} from './collision';
 const STEP=10,COLS=275,ROWS=171;
-export const destinations=[{id:'west',name:'西の森',x:205,y:505},{id:'east',name:'東の野原',x:2505,y:505},{id:'south',name:'南の野原',x:1405,y:1455}] as const;
+export const destinations=[{id:'west',name:'西の森',x:815,y:580},{id:'east',name:'東の野原',x:2505,y:505},{id:'south',name:'南の野原',x:1405,y:1455}] as const;
 const blocked=(x:number,y:number)=>WORLD_BLOCKS.some(([a,b,w,h])=>x+6>a&&x-6<a+w&&y+6>b&&y-6<b+h);
 /** Grid navigation is for directions only; physics remains authoritative. */
 export function findRoute(x:number,y:number,goalX:number,goalY:number):{x:number;y:number}[]{

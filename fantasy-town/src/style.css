@@ -36,3 +36,5 @@ button:disabled{cursor:default;opacity:.5}
 @media(pointer:coarse){.map{transform:scale(.88)}.route-controls button{min-height:36px;font-size:11px}.route-hint{font-size:11px}}
 
 .map-art>span.route-marker{right:auto;font-size:10px;line-height:1;white-space:nowrap}.route-follow{width:100%;margin-top:5px;padding:6px;color:#ead8ae;background:#443c2c;border:1px solid #9b8558;font:11px serif;pointer-events:auto;cursor:pointer}.route-follow:disabled{opacity:.45}
+
+.route-follow,.route-home{width:calc(50% - 2px);min-height:34px;vertical-align:top}.route-home{margin:5px 0 0 4px;padding:6px;color:#ead8ae;background:#443c2c;border:1px solid #9b8558;font:11px serif;pointer-events:auto;cursor:pointer}
