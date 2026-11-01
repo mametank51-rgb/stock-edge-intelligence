@@ -22,7 +22,7 @@ async function main(){
    const expected=JSON.parse(fs.readFileSync(file,'utf8')),profile=await wait(m=>m.type==='PLAYER_RESTORE');
    assert.equal(profile.player.name,'保存テスト');assert.equal(profile.player.x,1400);assert.equal(inventory.equipment.mainHand.instanceId,expected.sword);
    assert.ok(!inventory.inventory.items.some(i=>i.instanceId===expected.shield));const listing=await wait(m=>m.type==='MARKET_SNAPSHOT');assert.ok(listing.listings.some(l=>l.id===expected.shield));
-   console.log('PASS: profile, position, equipment and escrow restored after actual Worker restart');
+   console.log('PASS: profile, position, equipment and escrow restored on reconnect');
   }
  }finally{ws.close();await new Promise(resolve=>{if(ws.readyState===WebSocket.CLOSED)return resolve();ws.once('close',resolve);setTimeout(()=>{ws.terminate();resolve()},1500)})}
 }
