@@ -57,6 +57,11 @@ async function main(){
   assert.equal(await touch.locator('.stick').isVisible(),true);
   const stick=await touch.locator('.stick').boundingBox();a=await touch.evaluate(()=>window.__probe.positions.at(-1));
   await touch.mouse.move(stick.x+stick.width/2,stick.y+stick.height/2);await touch.mouse.down();await touch.mouse.move(stick.x+stick.width*.9,stick.y+stick.height/2);await touch.waitForTimeout(400);await touch.mouse.up();await touch.waitForTimeout(300);b=await touch.evaluate(()=>window.__probe.positions.at(-1));assert.ok(b.x-a.x>10,'Touch stick moves player');
+  await touch.getByRole('button',{name:'西の森'}).tap();await touch.getByRole('button',{name:'案内に沿って歩く'}).tap();
+  await touch.waitForFunction(()=>{const p=window.__probe?.positions.at(-1);return p&&Math.hypot(p.x-815,p.y-580)<20},null,{timeout:30000});
+  await touch.getByRole('button',{name:'町へ戻る'}).tap();
+  await touch.waitForFunction(()=>{const p=window.__probe?.positions.at(-1);return p&&Math.hypot(p.x-1415,p.y-480)<20},null,{timeout:5000});
+  console.log('PASS: mobile forest travel and return to town');
   await touch.locator('[data-window="キャラクター"]').tap();assert.equal(await touch.locator('.paper-portrait').isVisible(),true);
   const box=await touch.locator('.item-window').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=391,'Equipment fits portrait screen');
   await touch.screenshot({path:path.join(__dirname,'../evidence/mobile-portrait.png')});
